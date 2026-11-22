@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none';">
+<title>Mya — Relay AI Kawaii</title>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<link rel="stylesheet" href="./ui.css">
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="drag-area"><span class="icon">♡</span><strong>MYA</strong><span class="sub">AI KAWAII</span></div>
+    <div class="window-actions">
+      <button id="click-through" title="Click-through toggle (Ctrl+Shift+M)">◇</button>
+      <button id="minimize" title="Minimize">−</button>
+      <button id="quit" title="Quit">×</button>
+    </div>
+  </header>
+  <div class="avatar-stage" id="avatar-stage">
+    <canvas id="avatar-canvas" aria-label="Mya 3D avatar viewport"></canvas>
+    <div class="avatar-empty" id="avatar-empty">
+      <span class="avatar-symbol">♡</span>
+      <p>Meet Mya</p>
+      <small>Import your original GLB — no substitute character.</small>
+      <button class="primary" id="import-model">Import Mya's GLB</button>
+    </div>
+    <div class="avatar-hud"><span id="avatar-status">No character loaded</span><button id="avatar-recenter" title="Recenter model">⤾</button></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head">
+      <div><span class="dot"></span><strong>Mya</strong><span class="sub" id="state">Ready</span></div>
+      <nav aria-label="Panels"><button class="tab active" data-tab="chat">Chat</button><button class="tab" data-tab="screen">Screen</button><button class="tab" data-tab="settings">Settings</button></nav>
+    </div>
+    <section id="tab-chat" class="tab-content">
+      <div class="conversation" id="conversation" aria-live="polite">
+        <p class="mya-message">Hi! I'm Mya. Import my GLB to see me, or connect Ollama for a real local conversation. ♡</p>
+      </div>
+      <div class="composer">
+        <input id="chat-input" maxlength="2000" placeholder="Talk to Mya…" aria-label="Message Mya">
+        <button id="send" class="primary" title="Send message">➤</button>
+      </div>
+      <p class="hint">Local model only · Replies are not sent to a cloud service</p>
+    </section>
+    <section id="tab-screen" class="tab-content hidden">
+      <div class="control-group">
+        <div class="control-title">Screen awareness <span id="watch-indicator" class="off">OFF</span></div>
+        <p class="hint">Only the source you choose. Analysis runs locally in Ollama. No screenshots are saved.</p>
+        <select id="source-picker"><option value="">Choose a window or display</option></select>
+        <div class="controls"><button id="refresh-sources">Find windows</button><button id="start-watch" class="primary">Start watching</button><button id="stop-watch" disabled>Stop</button></div>
+        <div class="observation" id="observation">Screen observation is disabled.</div>
+      </div>
+    </section>
+    <section id="tab-settings" class="tab-content hidden">
+      <label>Conversation model <input id="chat-model" value="gemma3:4b"></label>
+      <label>Vision model <input id="vision-model" value="gemma3:4b"></label>
+      <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.45"></label>
+      <label class="check"><input id="voice-enabled" type="checkbox" checked> Speak responses using system voice</label>
+      <label class="check"><input id="economy-mode" type="checkbox"> Economy mode (30 second samples)</label>
+      <label class="check"><input id="quiet-mode" type="checkbox"> Quiet mode (also stops screen monitoring)</label>
+      <div class="controls"><button id="save-settings" class="primary">Save settings</button><button id="change-avatar">Change GLB</button></div>
+      <div class="memory-card">
+        <strong>Approved memories only</strong>
+        <p class="hint">Mya never automatically stores screen captures or conversation notes.</p>
+        <div class="composer"><input id="memory-text" maxlength="500" placeholder="Something to remember…"><button id="remember">Save</button></div>
+        <p class="hint" id="memory-count">0 saved</p>
+        <button id="erase-memories">Erase all saved memories</button>
+      </div>
+    </section>
+  </div>
+  <div id="toast" class="toast hidden" role="status"></div>
+</div>
+<script type="module" src="./renderer.mjs"></script>
+</body>
+</html>
