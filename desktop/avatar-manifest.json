@@ -1,0 +1,15 @@
+{
+  "name": "Mya",
+  "role": "canonical-user-avatar",
+  "sourceUpload": "7fa56a61494441448b35970c9f06a252.glb",
+  "format": "glTF 2.0 GLB",
+  "sizeBytes": 2726104,
+  "sha256": "2fd4937d69168f4234854dd634f0135e3a92165f16b5918dc52942a78ed09618",
+  "meshes": 14,
+  "joints": 232,
+  "materials": 12,
+  "embeddedAnimations": 0,
+  "morphTargets": 0,
+  "actualModelBytesInGitHub": false,
+  "notes": "This manifest records the exact uploaded canonical Mya GLB; it is NOT the GLB data. The model must be explicitly imported through the desktop app or Unity."
+}
