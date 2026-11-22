@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Explicit allowlist. The renderer has no Node.js or filesystem access.
 contextBridge.exposeInMainWorld('mya', Object.freeze({
   modelInfo: () => ipcRenderer.invoke('mya:model-info'),
+  diagnostics: () => ipcRenderer.invoke('mya:diagnostics'),
   loadModel: () => ipcRenderer.invoke('mya:model-read'),
   importModel: () => ipcRenderer.invoke('mya:model-import'),
   animationList: () => ipcRenderer.invoke('mya:animation-list'),
