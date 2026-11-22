@@ -352,6 +352,12 @@ async function importModel() {
 }
 for (const button of document.querySelectorAll('[data-tab]')) button.addEventListener('click', () => showTab(button.dataset.tab));
 ui('send').addEventListener('click', sendMessage);
+ui('clear-chat').addEventListener('click', async () => {
+  const result = await api.clearSessionChat();
+  if (!result.ok) { toast(result.error || 'Could not clear session'); return; }
+  ui('conversation').replaceChildren();
+  message('New session. I won’t keep that conversation as context. ♡');
+});
 ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state === 'recording') { await mic.stop(); return; }
   if (mic.state !== 'idle') return;
