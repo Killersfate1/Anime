@@ -106,7 +106,12 @@ export class MyaPushToTalk {
       const result = await this.bridge.transcribeMicrophone(wav);
       if (this.cancelled || operation !== this.operationId) return;
       if (!result?.text) throw new Error(result?.error || 'Local transcription produced no speech');
-      await this.onText(result.text);
+      // Return microphone to idle once speech has been transcribed; the AI
+      // response has its own lifecycle and must not hold mic permission open.
+      Promise.resolve().then(() => {
+        if (!this.cancelled && operation === this.operationId)
+          return this.onText(result.text);
+      }).catch(error => this.onError(error));
     } catch (error) {
       if (!this.cancelled && operation === this.operationId) this.onError(error);
     } finally {
