@@ -72,6 +72,7 @@ let animationFrame = 0;
 let lastFrameAt = 0;
 const clock = new THREE.Clock();
 const loader = new GLTFLoader();
+let emotionGestureTimeout = null;
 
 const speechSession = new SpeechSync({
   onStart: ({ emotion }) => {
@@ -79,11 +80,23 @@ const speechSession = new SpeechSync({
     ui('state').textContent = 'Speaking';
     face?.setTalking(true);
     face?.setEmotion(emotion);
-    kawaii?.play('Talk');
+    if (emotionGestureTimeout) clearTimeout(emotionGestureTimeout);
+    const gesture = {
+      happy: 'Cheer', surprised: 'Surprised', concerned: 'Concerned',
+      playful: 'Laugh', curious: 'Think', shy: 'Shy'
+    }[emotion];
+    if (gesture && kawaii?.play(gesture)) {
+      emotionGestureTimeout = setTimeout(() => {
+        emotionGestureTimeout = null;
+        if (speaking) kawaii?.play('Talk');
+      }, 850);
+    } else kawaii?.play('Talk');
     nextIdleMoment = performance.now() + 16000;
   },
   onBoundary: ({ viseme, strength }) => face?.setViseme(viseme, strength),
   onEnd: () => {
+    if (emotionGestureTimeout) clearTimeout(emotionGestureTimeout);
+    emotionGestureTimeout = null;
     speaking = false;
     face?.setTalking(false);
     face?.setEmotion('neutral');
