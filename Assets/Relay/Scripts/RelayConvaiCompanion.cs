@@ -11,6 +11,7 @@ namespace Relay.Studio
         public ConvaiCharacter character;
         public ConvaiManager manager;
         public CompanionPreview motion;
+        public MyaKawaiiBehaviour kawaiiMotion;
         public string Status { get; private set; } = "Disconnected";
         public bool Connecting { get; private set; }
         private CancellationTokenSource connection;
@@ -21,8 +22,16 @@ namespace Relay.Studio
             character.OnSpeechStarted += Speaking;
             character.OnSpeechStopped += Silent;
         }
-        private void Speaking() { if (motion) motion.speaking = true; }
-        private void Silent() { if (motion) motion.speaking = false; }
+        private void Speaking()
+        {
+            if (motion) motion.speaking = true;
+            if (kawaiiMotion) kawaiiMotion.SetSpeaking(true);
+        }
+        private void Silent()
+        {
+            if (motion) motion.speaking = false;
+            if (kawaiiMotion) kawaiiMotion.SetSpeaking(false);
+        }
 
         // Deliberately called only by an explicit user command, never Start or OnEnable.
         public async void ConnectCloud()
