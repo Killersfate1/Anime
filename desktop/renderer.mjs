@@ -19,9 +19,10 @@ const mic = new MyaPushToTalk(
     };
     ui('mic-status').textContent = labels[status] || status;
     ui('mic-status').classList.toggle('mic-active', status === 'recording');
-    ui('mic-toggle').textContent = status === 'recording' ? '■ Stop' : '🎙';
+    ui('mic-toggle').textContent = status === 'recording' ? '■ Stop' :
+      status === 'idle' ? '🎙' : '✕ Cancel';
     ui('mic-toggle').setAttribute('aria-pressed', status === 'recording' ? 'true' : 'false');
-    ui('mic-toggle').disabled = status === 'requesting' || status === 'processing' || status === 'transcribing';
+    ui('mic-toggle').disabled = false;
   },
   async (transcript) => {
     ui('chat-input').value = transcript;
@@ -453,7 +454,7 @@ ui('clear-chat').addEventListener('click', async () => {
 });
 ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state === 'recording') { await mic.stop(); return; }
-  if (mic.state !== 'idle') return;
+  if (mic.state !== 'idle') { await mic.cancel(); return; }
   // Interrupt Mya so speech doesn't contaminate the user's recording.
   speechSession.cancel();
   kawaii?.play('Idle');
