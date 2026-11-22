@@ -340,9 +340,53 @@ async function saveSettings() {
     toast('Settings saved.');
   } catch (error) { toast('Settings error: ' + error.message); }
 }
+let editingMemoryId = null;
+function resetMemoryEditor() {
+  editingMemoryId = null;
+  ui('memory-text').value = '';
+  ui('memory-kind').value = 'note';
+  ui('remember').textContent = 'Save';
+  ui('cancel-memory-edit').classList.add('hidden');
+}
 async function updateMemories() {
   const memories = await api.getMemories();
   ui('memory-count').textContent = memories.length + ' user-approved memories saved';
+  const list = ui('memory-list');
+  list.replaceChildren();
+  for (const entry of memories.slice().reverse()) {
+    const row = document.createElement('div');
+    row.className = 'memory-entry';
+    const body = document.createElement('div');
+    body.className = 'memory-entry-body';
+    const kind = document.createElement('span');
+    kind.className = 'memory-entry-kind';
+    kind.textContent = (entry.kind || 'note').replace('_', ' ');
+    const content = document.createElement('span');
+    content.textContent = entry.content;
+    body.append(kind, content);
+    const edit = document.createElement('button');
+    edit.textContent = 'Edit';
+    edit.title = 'Edit this saved memory';
+    edit.addEventListener('click', () => {
+      editingMemoryId = entry.id;
+      ui('memory-text').value = entry.content;
+      ui('memory-kind').value = entry.kind || 'note';
+      ui('remember').textContent = 'Update';
+      ui('cancel-memory-edit').classList.remove('hidden');
+      ui('memory-text').focus();
+    });
+    const remove = document.createElement('button');
+    remove.textContent = '×';
+    remove.title = 'Delete this saved memory';
+    remove.addEventListener('click', async () => {
+      const result = await api.deleteMemory(entry.id);
+      if (!result.ok) { toast('Memory could not be deleted'); return; }
+      if (editingMemoryId === entry.id) resetMemoryEditor();
+      await updateMemories();
+    });
+    row.append(body, edit, remove);
+    list.append(row);
+  }
 }
 async function importModel() {
   try {
@@ -388,16 +432,29 @@ ui('click-through').addEventListener('click', async () => {
   if (value) toast('Click-through enabled. Ctrl+Shift+M to interact again.');
 });
 ui('remember').addEventListener('click', async () => {
-  const text = ui('memory-text').value.trim();
-  if (!text) return;
-  await api.addMemory(text);
-  ui('memory-text').value = '';
+  const content = ui('memory-text').value.trim();
+  if (!content) return;
+  const record = { content, kind: ui('memory-kind').value };
+  const result = editingMemoryId
+    ? await api.updateMemory({ id: editingMemoryId, ...record })
+    : await api.addMemory(record);
+  if (!result.ok) { toast(result.error || 'Could not save memory'); return; }
+  resetMemoryEditor();
   await updateMemories();
-  toast('Saved only because you explicitly chose Remember.');
+  toast('Saved as an explicitly approved memory.');
+});
+ui('cancel-memory-edit').addEventListener('click', resetMemoryEditor);
+ui('export-memories').addEventListener('click', async () => {
+  try {
+    const result = await api.exportMemories();
+    if (result.ok) toast('Memory export completed.');
+    else if (!result.canceled) toast('Memory export was not completed.');
+  } catch (error) { toast('Export failed: ' + error.message); }
 });
 ui('erase-memories').addEventListener('click', async () => {
   if (!confirm('Permanently erase all Mya memory notes?')) return;
   await api.clearMemories();
+  resetMemoryEditor();
   await updateMemories();
   toast('Saved memories erased.');
 });
