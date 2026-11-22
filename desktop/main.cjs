@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { InitiativeGate } = require('./initiative.cjs');
+const canonicalAvatar = require('./avatar-manifest.json');
 
 const DEFAULTS = Object.freeze({
   chatModel: 'gemma3:4b',
@@ -130,6 +131,8 @@ function registerIpc() {
     if (!fs.existsSync(p)) return null;
     const bytes = fs.readFileSync(p);
     if (!validGlb(bytes)) throw new Error('Saved avatar is not a valid glTF 2.0 GLB');
+    if (crypto.createHash('sha256').update(bytes).digest('hex') !== canonicalAvatar.sha256)
+      throw new Error('Saved model is not the original uploaded Mya GLB. Import the canonical file again.');
     return { base64: bytes.toString('base64'), ...modelInfo() };
   });
   ipcMain.handle('mya:model-import', async () => {
@@ -141,6 +144,8 @@ function registerIpc() {
     if (chosen.canceled || chosen.filePaths.length !== 1) return null;
     const bytes = fs.readFileSync(chosen.filePaths[0]);
     if (!validGlb(bytes)) throw new Error('Select a valid glTF 2.0 GLB model under 100 MB');
+    if (crypto.createHash('sha256').update(bytes).digest('hex') !== canonicalAvatar.sha256)
+      throw new Error('This is not the exact original Mya GLB uploaded to the project. Refusing to replace her with a different model.');
     const destination = avatarPath();
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination + '.tmp', bytes);
