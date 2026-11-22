@@ -488,6 +488,20 @@ ui('preview-voice').addEventListener('click', () => {
   speechSession.speak('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?',
     { enabled: true, rate: 0.96, pitch: 1.15 });
 });
+ui('check-mya').addEventListener('click', async () => {
+  ui('mya-diagnostics').textContent = 'Checking local services…';
+  try {
+    const status = await api.diagnostics();
+    const model = status.canonicalModel ? 'Verified (' + status.modelLocation + ')' : 'Missing / unverified';
+    const kawaiiStatus = status.kawaiiClips + '/' + status.kawaiiExpected + ' files found';
+    ui('mya-diagnostics').textContent =
+      'Canonical GLB: ' + model +
+      '\nKawaii FBX: ' + kawaiiStatus +
+      '\nOllama: ' + (status.ollama.reachable ? 'reachable' : 'offline') +
+      '\nwhisper.cpp: ' + (status.whisper.reachable ? 'reachable' : 'offline') +
+      '\nAnimation quality: NOT verified · Accurate lip sync: NOT verified';
+  } catch (error) { ui('mya-diagnostics').textContent = 'Diagnostics failed: ' + error.message; }
+});
 ui('preview-wave').addEventListener('click', () => {
   if (!character) { toast('Import Mya\'s GLB first'); return; }
   if (!kawaii?.play('Wave')) toast('Wave animation unavailable; check FBX retarget warnings');
