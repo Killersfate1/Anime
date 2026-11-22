@@ -24,7 +24,36 @@ if ($LASTEXITCODE -ne 0 -or $Branch -ne 'main') {
 & git -C $Root fetch origin main
 if ($LASTEXITCODE -ne 0) { throw 'Fetch failed. No file changes made.' }
 $AheadBehind = (& git -C $Root rev-list --left-right --count 'HEAD...origin/main').Trim()
-if ($LASTEXITCODE -ne 0 -or $AheadBehind -ne '0' + [char]9 + '0') {
+if ($LASTEXITCODE -ne 0 -or $AheadBehind -notmatch '^0\s+0) {
+  Write-Host "Local branch differs from origin/main ($AheadBehind). Review/sync before importing."
+  throw 'Branch is not synchronized. No file changes made.'
+}
+$Existing = (& git -C $Root status --porcelain -- $DestinationRelative).Trim()
+if ($Existing) {
+  throw "Destination already has local changes. Refusing to overwrite: $DestinationRelative"
+}
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Destination) | Out-Null
+Copy-Item -LiteralPath $Source -Destination $Destination -Force
+
+# Create a Unity .meta for the imported GLB from within Unity, then commit it
+# separately if desired. We never manufacture an unverified Unity GUID.
+& git -C $Root add -- $DestinationRelative
+if ($LASTEXITCODE -ne 0) { throw 'Git add failed.' }
+& git -C $Root commit -m 'Add exact canonical Mya GLB (SHA-256 verified)' -- $DestinationRelative
+if ($LASTEXITCODE -ne 0) {
+  Write-Host 'No commit made (perhaps the exact file was already tracked).'
+  exit 0
+}
+Write-Host 'Mya committed locally to main. The repository is public: pushing exposes the model file.'
+$Choice = Read-Host 'Push the verified model to public GitHub main? Type YES to continue'
+if ($Choice -cne 'YES') {
+  Write-Host 'Not pushed. Commit is retained locally for review.'
+  exit 0
+}
+& git -C $Root push origin main
+if ($LASTEXITCODE -ne 0) { throw 'Push failed. Local commit preserved; review remote updates and retry safely.' }
+Write-Host 'Exact Mya GLB uploaded to GitHub main.'
+) {
   Write-Host "Local branch differs from origin/main ($AheadBehind). Review/sync before importing."
   throw 'Branch is not synchronized. No file changes made.'
 }
