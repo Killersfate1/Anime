@@ -1,9 +1,32 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MyaKawaiiAnimation } from './kawaii.mjs';
+import { MyaPushToTalk } from './voice.mjs';
 
 const ui = (id) => document.getElementById(id);
 const api = window.mya;
+const mic = new MyaPushToTalk(
+  api,
+  (status) => {
+    const labels = {
+      idle: 'Microphone OFF · Click 🎙 to talk · Requires local whisper.cpp',
+      requesting: 'Requesting microphone permission…',
+      recording: 'MICROPHONE ON · Click Stop or wait up to 15 seconds',
+      processing: 'Recording stopped · Preparing WAV locally…',
+      transcribing: 'Microphone OFF · Transcribing on this computer…'
+    };
+    ui('mic-status').textContent = labels[status] || status;
+    ui('mic-status').classList.toggle('mic-active', status === 'recording');
+    ui('mic-toggle').textContent = status === 'recording' ? '■ Stop' : '🎙';
+    ui('mic-toggle').setAttribute('aria-pressed', status === 'recording' ? 'true' : 'false');
+    ui('mic-toggle').disabled = status === 'requesting' || status === 'processing' || status === 'transcribing';
+  },
+  async (transcript) => {
+    ui('chat-input').value = transcript;
+    await sendMessage();
+  },
+  error => toast('Microphone/recognition: ' + (error?.message || String(error)))
+);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 1000);
 const renderer = new THREE.WebGLRenderer({
@@ -329,6 +352,15 @@ async function importModel() {
 }
 for (const button of document.querySelectorAll('[data-tab]')) button.addEventListener('click', () => showTab(button.dataset.tab));
 ui('send').addEventListener('click', sendMessage);
+ui('mic-toggle').addEventListener('click', async () => {
+  if (mic.state === 'recording') { await mic.stop(); return; }
+  if (mic.state !== 'idle') return;
+  // Interrupt Mya so speech doesn't contaminate the user's recording.
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  speaking = false;
+  kawaii?.play('Idle');
+  await mic.start();
+});
 ui('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter') sendMessage(); });
 ui('import-model').addEventListener('click', importModel);
 ui('change-avatar').addEventListener('click', importModel);
@@ -337,8 +369,14 @@ ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
-ui('minimize').addEventListener('click', () => api.minimize());
-ui('quit').addEventListener('click', () => api.quit());
+ui('minimize').addEventListener('click', async () => {
+  await mic.cancel();
+  api.minimize();
+});
+ui('quit').addEventListener('click', async () => {
+  await mic.cancel();
+  api.quit();
+});
 ui('click-through').addEventListener('click', async () => {
   const value = await api.toggleClickThrough();
   if (value) toast('Click-through enabled. Ctrl+Shift+M to interact again.');
@@ -377,6 +415,7 @@ ui('avatar-stage').addEventListener('pointermove', event => {
   character.rotation.y = characterYaw;
 });
 window.addEventListener('pointerup', () => { pointerX = null; });
+window.addEventListener('beforeunload', () => { mic.cancel(); });
 (async () => {
   try {
     await loadSettings();
