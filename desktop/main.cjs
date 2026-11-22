@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut } =
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { InitiativeGate } = require('./initiative.cjs');
 
 const DEFAULTS = Object.freeze({
   chatModel: 'gemma3:4b',
@@ -18,9 +19,7 @@ let window = null;
 let chosenSource = null;
 let observationEnabled = false; // always OFF after a restart
 let lastSampleAt = 0;
-let lastReactionAt = 0;
-let lastEvent = '';
-let eventConfirmations = 0;
+const initiative = new InitiativeGate();
 let ignoreMouse = false;
 let activeAnalysis = null;
 let quitting = false;
@@ -67,8 +66,7 @@ function validGlb(bytes) {
 function stopObservation() {
   observationEnabled = false;
   chosenSource = null;
-  lastEvent = '';
-  eventConfirmations = 0;
+  initiative.reset();
   if (activeAnalysis) activeAnalysis.abort();
   window?.webContents.send('mya:observe-stopped');
 }
@@ -190,9 +188,7 @@ function registerIpc() {
     chosenSource = sourceId;
     observationEnabled = true;
     lastSampleAt = 0;
-    lastReactionAt = 0;
-    lastEvent = '';
-    eventConfirmations = 0;
+    initiative.reset();
     return true;
   });
   ipcMain.handle('mya:observe-stop', () => { stopObservation(); return true; });
@@ -226,19 +222,11 @@ function registerIpc() {
       if (!observationEnabled || chosenSource !== chosen.id) return { observationEnabled: false };
       const result = parseVision(raw);
       if (!result) return { error: 'Vision model did not return valid structured observations.' };
-      if (result.event !== 'none' && result.event && result.event === lastEvent) eventConfirmations++;
-      else { eventConfirmations = 1; lastEvent = result.event; }
-      // Require two matching independent observations; a model confidence
-      // score alone is never enough to assert a game event.
-      const threshold = 0.88 - settings.talkativeness * 0.22;
-      const score = 0.7 * result.significance + 0.3 * result.confidence;
-      const shouldSpeak = !!(result.proposedComment && result.event !== 'none' &&
-        result.confidence >= 0.78 && score >= threshold &&
-        eventConfirmations >= 2 && Date.now() - lastReactionAt >= 60000);
-      if (shouldSpeak) {
-        lastReactionAt = Date.now();
-        eventConfirmations = 0;
-      }
+      const decision = initiative.consider(result, {
+        talkativeness: settings.talkativeness,
+        quietMode: settings.quietMode
+      });
+      const shouldSpeak = decision.shouldSpeak;
       return { ...result, shouldSpeak, observationEnabled: true };
     } catch (error) {
       if (controller.signal.aborted) return { observationEnabled: false };
