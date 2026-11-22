@@ -66,9 +66,16 @@
       <div class="memory-card">
         <strong>Approved memories only</strong>
         <p class="hint">Mya never automatically stores screen captures or conversation notes.</p>
-        <div class="composer"><input id="memory-text" maxlength="500" placeholder="Something to remember…"><button id="remember">Save</button></div>
+        <div class="composer"><select id="memory-kind" aria-label="Memory type">
+          <option value="note">Note</option>
+          <option value="preference">Preference</option>
+          <option value="project">Project</option>
+          <option value="shared_activity">Shared activity</option>
+          <option value="conversation">Conversation</option>
+        </select><input id="memory-text" maxlength="500" placeholder="Something to remember…"><button id="remember">Save</button><button id="cancel-memory-edit" class="hidden" title="Cancel edit">×</button></div>
         <p class="hint" id="memory-count">0 saved</p>
-        <button id="erase-memories">Erase all saved memories</button>
+        <div id="memory-list" class="memory-list" aria-label="Saved memories"></div>
+        <div class="controls"><button id="export-memories">Export JSON</button><button id="erase-memories">Erase all saved memories</button></div>
       </div>
     </section>
   </div>
