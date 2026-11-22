@@ -94,11 +94,25 @@ function currentSettings() {
   };
 }
 function avatarPath() { return userFile(path.join('models', 'mya.glb')); }
+function bundledAvatarPath() {
+  return path.join(__dirname, '..', 'Assets', 'UserAssets', 'Mya.glb');
+}
+function verifiedAvatarPath() {
+  for (const candidate of [avatarPath(), bundledAvatarPath()]) {
+    if (!fs.existsSync(candidate)) continue;
+    const bytes = fs.readFileSync(candidate);
+    if (validGlb(bytes) && crypto.createHash('sha256').update(bytes).digest('hex') === canonicalAvatar.sha256)
+      return candidate;
+  }
+  return null;
+}
 function modelInfo() {
-  if (!fs.existsSync(avatarPath())) return null;
-  const bytes = fs.readFileSync(avatarPath());
+  const candidate = verifiedAvatarPath();
+  if (!candidate) return null;
+  const bytes = fs.readFileSync(candidate);
   return {
     file: 'mya.glb',
+    source: candidate === avatarPath() ? 'local import' : 'project Assets/UserAssets',
     sizeBytes: bytes.length,
     sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
     format: 'glTF 2.0 GLB'
@@ -247,8 +261,8 @@ function registerIpc() {
   });
   ipcMain.handle('mya:model-info', () => modelInfo());
   ipcMain.handle('mya:model-read', () => {
-    const p = avatarPath();
-    if (!fs.existsSync(p)) return null;
+    const p = verifiedAvatarPath();
+    if (!p) return null;
     const bytes = fs.readFileSync(p);
     if (!validGlb(bytes)) throw new Error('Saved avatar is not a valid glTF 2.0 GLB');
     if (crypto.createHash('sha256').update(bytes).digest('hex') !== canonicalAvatar.sha256)
