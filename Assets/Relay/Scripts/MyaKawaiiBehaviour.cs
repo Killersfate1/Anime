@@ -40,6 +40,7 @@ namespace Relay.Studio
         private float nextIdleAt;
         private float nextReactionAt;
         private float actionEndsAt;
+        private bool actionActive;
         private string currentState;
 
         private void Awake()
@@ -64,7 +65,13 @@ namespace Relay.Studio
                 return;
             }
 
-            if (Time.unscaledTime < actionEndsAt) return;
+            if (actionActive)
+            {
+                if (Time.unscaledTime < actionEndsAt) return;
+                actionActive = false;
+                Play("Idle");
+                return;
+            }
 
             if (listening)
             {
@@ -90,6 +97,7 @@ namespace Relay.Studio
             if (value)
             {
                 actionEndsAt = 0f;
+                actionActive = false;
                 Play("Talk");
             }
             else
@@ -179,6 +187,7 @@ namespace Relay.Studio
             if (Play(state))
             {
                 actionEndsAt = Time.unscaledTime + Mathf.Max(0.1f, seconds);
+                actionActive = true;
                 nextIdleAt = actionEndsAt + UnityEngine.Random.Range(3f, 8f);
             }
         }
