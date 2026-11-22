@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -25,6 +25,25 @@ const initiative = new InitiativeGate();
 let ignoreMouse = false;
 let activeAnalysis = null;
 let quitting = false;
+let micPermissionUntil = 0;
+let transcribing = false;
+
+// Only a foreground click on the UI arms the microphone. The OS and Electron
+// permission handlers both apply; no mic is live on app startup.
+function allowMicrophoneForTrustedPage(webContents, permission, details) {
+  if (!window || !webContents || webContents.id !== window.webContents.id) return false;
+  if (permission !== 'media' || Date.now() > micPermissionUntil) return false;
+  if (Array.isArray(details?.mediaTypes) && details.mediaTypes.includes('video')) return false;
+  return true;
+}
+function configurePermissions() {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    callback(allowMicrophoneForTrustedPage(webContents, permission, details));
+  });
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, _origin, details) =>
+    allowMicrophoneForTrustedPage(webContents, permission, details)
+  );
+}
 
 function userFile(name) { return path.join(app.getPath('userData'), name); }
 function safeJsonRead(filename, fallback) {
@@ -141,6 +160,55 @@ function registerIpc() {
     const bytes = fs.readFileSync(file);
     if (bytes.length > 30 * 1024 * 1024) throw new Error('Animation clip is too large');
     return { name, loop: !!entry.loop, base64: bytes.toString('base64') };
+  });
+  ipcMain.handle('mya:mic-arm', (event) => {
+    if (!window || event.sender.id !== window.webContents.id || currentSettings().quietMode) return false;
+    micPermissionUntil = Date.now() + 20000;
+    return true;
+  });
+  ipcMain.handle('mya:mic-disarm', () => {
+    micPermissionUntil = 0;
+    return true;
+  });
+  ipcMain.handle('mya:voice-transcribe', async (event, raw) => {
+    if (!window || event.sender.id !== window.webContents.id) return { error: 'Unauthorized microphone request' };
+    if (transcribing) return { error: 'Transcription is already in progress' };
+    if (!(raw instanceof Uint8Array) && !(raw instanceof ArrayBuffer))
+      return { error: 'Invalid microphone audio payload' };
+    const data = Buffer.from(raw);
+    if (data.length < 48 || data.length > 550000 ||
+        data.toString('ascii', 0, 4) !== 'RIFF' ||
+        data.toString('ascii', 8, 12) !== 'WAVE' ||
+        data.toString('ascii', 12, 16) !== 'fmt ' ||
+        data.readUInt16LE(20) !== 1 ||
+        data.readUInt16LE(22) !== 1 ||
+        data.readUInt32LE(24) !== 16000 ||
+        data.readUInt16LE(34) !== 16 ||
+        data.toString('ascii', 36, 40) !== 'data' ||
+        data.readUInt32LE(40) !== data.length - 44)
+      return { error: 'Expected mono, 16 kHz, 16-bit PCM WAV under 16 seconds' };
+    transcribing = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    try {
+      const form = new FormData();
+      form.append('file', new Blob([data], { type: 'audio/wav' }), 'mya-microphone.wav');
+      form.append('response_format', 'json');
+      form.append('temperature', '0.0');
+      const response = await fetch('http://127.0.0.1:8080/inference', {
+        method: 'POST', body: form, signal: controller.signal
+      });
+      if (!response.ok) throw new Error('Local whisper.cpp returned HTTP ' + response.status);
+      const result = await response.json();
+      const text = cleanText(result?.text || result?.transcription || '', 2000);
+      return text ? { text } : { error: 'Whisper reported no spoken words' };
+    } catch (error) {
+      return { error: 'Local speech recognition unavailable. Start whisper.cpp server on 127.0.0.1:8080. ' +
+        (error?.message || 'Transcription failed') };
+    } finally {
+      clearTimeout(timeout);
+      transcribing = false;
+    }
   });
   ipcMain.handle('mya:model-info', () => modelInfo());
   ipcMain.handle('mya:model-read', () => {
@@ -282,6 +350,7 @@ function registerIpc() {
   ipcMain.handle('mya:quit', () => { quitting = true; stopObservation(); app.quit(); });
 }
 app.whenReady().then(() => {
+  configurePermissions();
   registerIpc();
   createWindow();
   globalShortcut.register('CommandOrControl+Shift+M', () => {
@@ -290,6 +359,10 @@ app.whenReady().then(() => {
     window.setIgnoreMouseEvents(ignoreMouse, { forward: true });
   });
 });
-app.on('before-quit', () => { quitting = true; stopObservation(); });
+app.on('before-quit', () => {
+  quitting = true;
+  micPermissionUntil = 0;
+  stopObservation();
+});
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
