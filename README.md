@@ -6,7 +6,7 @@ A new local-first Electron desktop app is available in [`desktop/`](desktop/READ
 
 **Run:** `cd desktop && npm install && npm start`. Ollama and a locally installed compatible model are needed for chat and visual analysis. See `desktop/README.md` for setup and unverified features.
 
-The exact uploaded GLB is **not** checked into GitHub: the binary upload is currently blocked by the connected GitHub writer. Import your unmodified GLB in the running desktop app. The Kawaii animation clips are in Unity; they still need desktop retargeting/export. This is **not** a finished product or a tested Windows release.
+The exact uploaded GLB is **not** checked into GitHub: the binary upload is currently blocked by the connected GitHub writer. Import your unmodified GLB in the running desktop app. The Kawaii FBX clips are now exposed to the desktop renderer through an allowlisted bridge, with attempted humanoid retargeting to Mya's bones. This still requires visual verification/calibration; do not treat it as a finished animation setup. This is **not** a finished product or a tested Windows release. To commit the exact GLB from your Windows machine to `main`, use `scripts/import-mya-glb.ps1` after reviewing the public-repository/license implications.
 
 ## Unity Asset Studio
 
