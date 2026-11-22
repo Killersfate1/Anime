@@ -1,0 +1,14 @@
+/Library/
+/Temp/
+/Obj/
+/Logs/
+/UserSettings/
+/Builds/
+/Verification/
+/Verification.log
+/.vs/
+*.csproj
+*.sln
+/Assets/Resources/ConvaiSettings.asset
+/Assets/Resources/ConvaiSettings.asset.meta
+/ConvaiVerification.log
