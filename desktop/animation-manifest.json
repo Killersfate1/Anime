@@ -1,0 +1,50 @@
+{
+  "Idle": {
+    "file": "@KA_Idle01_breathing.FBX",
+    "loop": true
+  },
+  "LookAround": {
+    "file": "@KA_Idle02_LookLeftAndRight.FBX",
+    "loop": false
+  },
+  "Waiting": {
+    "file": "@KA_Idle09_Waiting.FBX",
+    "loop": true
+  },
+  "Stretch": {
+    "file": "@KA_Idle05_Stretch.FBX",
+    "loop": false
+  },
+  "Talk": {
+    "file": "@KA_Idle50_StandingTalk1_1.FBX",
+    "loop": true
+  },
+  "Think": {
+    "file": "@KA_Idle08_ComeUpWithAnIdea.FBX",
+    "loop": false
+  },
+  "Cheer": {
+    "file": "@KA_Idle36_Yay.FBX",
+    "loop": false
+  },
+  "Shy": {
+    "file": "@KA_Idle18_Shy.FBX",
+    "loop": false
+  },
+  "Surprised": {
+    "file": "@KA_Idle29_Surprised.FBX",
+    "loop": false
+  },
+  "Concerned": {
+    "file": "@KA_Idle67_FeelDown.FBX",
+    "loop": false
+  },
+  "Laugh": {
+    "file": "@KA_Idle28_Laugh.FBX",
+    "loop": false
+  },
+  "Wave": {
+    "file": "@KA_Idle45_WaveHandSlightly.FBX",
+    "loop": false
+  }
+}
