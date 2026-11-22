@@ -23,14 +23,14 @@ This is an **initial executable desktop foundation**, not yet a verified, comple
 
 ## Still incomplete or unverified
 
-- **GitHub model copy**: the GLB is in the ChatGPT attachment but not in the repo; the connected GitHub file writer accepts UTF-8 text only. Import from your local GLB file at runtime as above.
-- **Kawaii FBX in Electron:** The Unity project includes 416 FBX clips, and `MyaKawaiiSetup.cs` configures 12 in Unity. These Unity animations do **not** automatically play in Three.js. Native desktop retargeted animation export and actual runtime state integration remain to be built.
+- **GitHub model copy**: the GLB is in the ChatGPT attachment but not in the repo; the connected GitHub file writer accepts UTF-8 text only. Import from your local GLB file at runtime as above. The importer verifies its SHA-256 against `avatar-manifest.json` so no substitute model is silently accepted. To upload the exact GLB to public GitHub `main` from Windows, use the verified `scripts/import-mya-glb.ps1` script after checking your licensing/privacy obligations.
+- **Kawaii FBX in Electron:** This branch now includes `desktop/kawaii.mjs`, an experimental runtime retargeting bridge that loads 12 allowlisted FBX clips and maps the inspected bone names to the canonical GLB skeleton. **No actual Windows runtime/pose test has been run**, so hands, orientation, clip loops and facial/cloth interactions may still require corrective calibration. Unity and Three.js remain separate runtimes.
 - **Facial expressions and real lip sync:** Uploaded GLB has no morph targets/embedded animations and no verified jaw bone. Do not fake a lip-sync capability. Rig extensions require dedicated work.
 - **Screen awareness:** Only single still-frame local image analysis is implemented, not streaming game telemetry. Some Windows content can appear black or unavailable due to DRM/security. Do not claim to see unsupported windows.
 - **Microphone/STT:** Not implemented; TTS is basic system voice, not an expressive neural voice.
 - **Research and tools:** No autonomous web browsing, scheduling or computer actions; these require further consent and separate modules.
 - **Memory:** Explicitly user-approved notes only; no cross-session conversation archive, semantic indexing, project memory or automatic consolidation yet.
-- **Testing:** This execution environment did not run the Windows Electron GUI, Unity editor or Ollama; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
+- **Testing:** Five pure-JS initiative logic cases passed isolated tests; source syntax checks also passed. This execution environment did not run the Windows Electron GUI, Unity editor or Ollama; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
 
 ## Privacy
 
