@@ -24,6 +24,18 @@ Voice input is now coded through the **🎙 microphone button**. It requires a *
 
 Mya now has recent in-memory context for **12 question/answer turns**, with a **Clear session** control. This context is deliberately not saved automatically. Manually approved memories remain separate in local settings.
 
+## Reviewed long-term memories
+
+The Settings panel supports **manually approved** long-term notes, preferences, projects, shared activities and conversation memories. Each entry can be reviewed, edited or individually deleted. Export writes JSON only after a user chooses a destination in a native Save dialog; Erase all requires confirmation. None of these memory actions infer private facts from screenshots or microphone recordings.
+
+When Mya answers, she retrieves up to twelve approved memories by a simple keyword-matching rank. This is **not** vector search or advanced semantic memory yet. Conversation context from the current session remains separate and is never saved automatically.
+
+## Screen context and analysis performance
+
+When screen monitoring is explicitly enabled, the app analyzes selected windows/displays. Before asking the local vision model for another analysis, it compares a 96×54 BGRA thumbnail to the last one and skips practically unchanged frames. The last approved activity summary is available to chat for at most 60 seconds while monitoring remains enabled; Stop clears it immediately. The screen image is not written to disk.
+
+Screen text, OCR, and model-generated descriptions are treated as untrusted data and should never authorize actions. Visual event recognition still requires real-game verification to establish accuracy.
+
 ## Verification commands
 
 Run `npm run check` to syntax-check the Electron source and `npm test` for initiative, WAV encoding, and session-context unit tests. These are not replacements for Windows Electron, microphone, Ollama, Kawaii rig, and Play Mode tests.
