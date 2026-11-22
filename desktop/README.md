@@ -11,6 +11,16 @@ This is an **initial executable desktop foundation**, not yet a verified, comple
 5. For screen awareness, open Screen, click Find windows, choose the specific source, and click Start watching. The indicator should say WATCHING; Stop disables it immediately. Observation starts OFF every launch.
 6. System TTS currently speaks dialogue using the installed Windows voices. **This is not yet phoneme-accurate lip sync.**
 
+## Mya speech + expression integration
+
+The current implementation coordinates local transcribed user speech, Ollama responses, system voice synthesis, Kawaii body gestures and a facial-control adapter. The avatar enters a waiting/thinking pose while listening/transcribing; speech start triggers an emotional gesture and then the talking animation. Ending or interrupting speech returns her to idle. There are guards against canceled transcriptions creating delayed chat messages.
+
+The supplied canonical Mya GLB has **no facial morph targets or jaw bone**. The optional mouth overlay in Settings is a **calibration-only visual approximation** and starts disabled. Manually adjust X/Y/depth/width/height and flip direction if necessary. The exact character geometry is not replaced or rewritten. The system can recognize facial morphs or a jaw in future re-rigged versions without depending on this overlay.
+
+For a no-services-required animation preview, import the exact GLB, open Settings, try **Test Kawaii wave** and **Test voice + mouth**. For live services, choose **Check services** to see the validated model location, Kawaii clip count, and localhost Ollama/whisper.cpp connection status.
+
+**These are features in code, not verified visual results.** Use [ACCEPTANCE.md](ACCEPTANCE.md) for the Windows end-to-end test and clear pass/fail criteria. GitHub Actions checks syntax and unit-test logic on changes to `desktop/`; it cannot validate animations, audio devices or rendering.
+
 ## Push-to-talk voice and local speech recognition
 
 Voice input is now coded through the **🎙 microphone button**. It requires a **local whisper.cpp server** listening at `127.0.0.1:8080`, with a compatible Whisper model loaded. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Ollama supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
