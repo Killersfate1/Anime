@@ -37,6 +37,7 @@ let activeAnalysis = null;
 let quitting = false;
 let micPermissionUntil = 0;
 let transcribing = false;
+let activeTranscription = null;
 let chatBusy = false;
 const conversation = new ChatContext(12);
 let previousTinyFrame = null;
@@ -196,9 +197,15 @@ function registerIpc() {
     micPermissionUntil = 0;
     return true;
   });
+  ipcMain.handle('mya:voice-cancel', () => {
+    activeTranscription?.abort();
+    micPermissionUntil = 0;
+    return { ok: true };
+  });
   ipcMain.handle('mya:voice-transcribe', async (event, raw) => {
     if (!window || event.sender.id !== window.webContents.id) return { error: 'Unauthorized microphone request' };
     if (transcribing) return { error: 'Transcription is already in progress' };
+    if (currentSettings().quietMode) return { error: 'Quiet mode is enabled' };
     if (!(raw instanceof Uint8Array) && !(raw instanceof ArrayBuffer))
       return { error: 'Invalid microphone audio payload' };
     const data = Buffer.from(raw);
@@ -215,6 +222,7 @@ function registerIpc() {
       return { error: 'Expected mono, 16 kHz, 16-bit PCM WAV under 16 seconds' };
     transcribing = true;
     const controller = new AbortController();
+    activeTranscription = controller;
     const timeout = setTimeout(() => controller.abort(), 45000);
     try {
       const form = new FormData();
@@ -233,6 +241,7 @@ function registerIpc() {
         (error?.message || 'Transcription failed') };
     } finally {
       clearTimeout(timeout);
+      if (activeTranscription === controller) activeTranscription = null;
       transcribing = false;
     }
   });
@@ -449,7 +458,12 @@ function registerIpc() {
     window?.setIgnoreMouseEvents(ignoreMouse, { forward: true });
     return ignoreMouse;
   });
-  ipcMain.handle('mya:minimize', () => { stopObservation(); window?.minimize(); });
+  ipcMain.handle('mya:minimize', () => {
+    stopObservation();
+    micPermissionUntil = 0;
+    activeTranscription?.abort();
+    window?.minimize();
+  });
   ipcMain.handle('mya:quit', () => { quitting = true; stopObservation(); app.quit(); });
 }
 app.whenReady().then(() => {
@@ -465,6 +479,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   quitting = true;
   micPermissionUntil = 0;
+  activeTranscription?.abort();
   stopObservation();
 });
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
