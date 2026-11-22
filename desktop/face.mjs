@@ -114,7 +114,13 @@ export class MyaFace {
   }
   update(deltaSeconds) {
     const dt = clamp(Number(deltaSeconds) || 0.016, 0.001, 0.1);
-    const wanted = this.talking ? Math.max(0.12, this.target) : 0;
+    // Some system voices do not emit word boundary callbacks. In that case,
+    // use a visibly animated approximation rather than a frozen mouth.
+    // It is not waveform-driven or phoneme-accurate.
+    const fallbackPulse = this.viseme === 'rest' && this.talking
+      ? 0.14 + 0.18 * Math.abs(Math.sin(Date.now() * 0.011)) : 0;
+    const wanted = !this.talking ? 0 :
+      this.viseme === 'closed' ? 0.01 : Math.max(0.07, this.target, fallbackPulse);
     this.mouth = THREE.MathUtils.damp(this.mouth, wanted, this.talking ? 15 : 12, dt);
     this.target = Math.max(0, this.target - 2.8 * dt);
     const mouth = this.mouth;
