@@ -185,7 +185,37 @@ function parseVision(text) {
     };
   } catch { return null; }
 }
+async function localStatus(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(2500) });
+    return { reachable: true, status: response.status };
+  } catch {
+    return { reachable: false };
+  }
+}
 function registerIpc() {
+  ipcMain.handle('mya:diagnostics', async () => {
+    const available = Object.values(kawaiiClips).filter(entry => {
+      const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100',
+        'Assets', 'Animations', entry.file);
+      return fs.existsSync(file);
+    }).length;
+    const [ollama, whisper] = await Promise.all([
+      localStatus('http://127.0.0.1:11434/api/tags'),
+      localStatus('http://127.0.0.1:8080/')
+    ]);
+    return {
+      canonicalModel: !!verifiedAvatarPath(),
+      modelLocation: modelInfo()?.source || 'not imported',
+      kawaiiClips: available,
+      kawaiiExpected: Object.keys(kawaiiClips).length,
+      ollama, whisper,
+      screenMonitoringEnabled: observationEnabled,
+      // This check cannot establish render, rigging, or phoneme quality.
+      liveAnimationVerified: false,
+      accurateLipSyncVerified: false
+    };
+  });
   ipcMain.handle('mya:animation-list', () =>
     Object.keys(kawaiiClips).filter(name => {
       const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', kawaiiClips[name].file);
