@@ -63,6 +63,22 @@
       <label class="check"><input id="economy-mode" type="checkbox"> Economy mode (30 second samples)</label>
       <label class="check"><input id="quiet-mode" type="checkbox"> Quiet mode (also stops screen monitoring)</label>
       <div class="controls"><button id="save-settings" class="primary">Save settings</button><button id="change-avatar">Change GLB</button></div>
+      <div class="face-tools">
+        <strong>Face &amp; speech calibration</strong>
+        <p class="hint" id="face-diagnostics">Import Mya's GLB to inspect facial controls.</p>
+        <label class="check"><input type="checkbox" id="mouth-enabled"> Enable optional calibrated mouth overlay (experimental)</label>
+        <p class="hint">Your GLB has no facial morphs or jaw. The overlay does not change her model; position it manually before using it. Mouth motion follows speech word boundaries approximately, not exact phonemes.</p>
+        <div class="face-sliders">
+          <label>X <input type="range" id="mouth-x" min="-0.35" max="0.35" step="0.005"></label>
+          <label>Y <input type="range" id="mouth-y" min="-0.4" max="0.25" step="0.005"></label>
+          <label>Depth <input type="range" id="mouth-z" min="-0.45" max="0.45" step="0.005"></label>
+          <label>Width <input type="range" id="mouth-width" min="0.005" max="0.10" step="0.0025"></label>
+          <label>Height <input type="range" id="mouth-height" min="0.002" max="0.06" step="0.001"></label>
+          <label class="check"><input type="checkbox" id="mouth-face-back"> Flip mouth direction</label>
+        </div>
+        <div class="controls"><button id="preview-voice">Test voice + mouth</button><button id="preview-wave">Test Kawaii wave</button></div>
+        <p class="hint" id="speech-diagnostics">Voice uses the installed system TTS voice. This is a calibration preview, not verified lip sync.</p>
+      </div>
       <div class="memory-card">
         <strong>Approved memories only</strong>
         <p class="hint">Mya never automatically stores screen captures or conversation notes.</p>
