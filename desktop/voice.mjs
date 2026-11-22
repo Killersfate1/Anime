@@ -63,11 +63,29 @@ export class MyaPushToTalk {
     this.state = 'processing';
     this.onStatus('processing');
     this.clearTimer();
-    this.stream?.getTracks().forEach(track => track.stop());
     try {
       if (this.recorder?.state !== 'inactive') this.recorder.stop();
     } catch (error) { await this.fail(error); }
+    this.stream?.getTracks().forEach(track => track.stop());
     await this.bridge.disarmMicrophone();
+  }
+
+  async cancel() {
+    this.cancelled = true;
+    this.clearTimer();
+    try {
+      if (this.recorder) {
+        this.recorder.onstop = null;
+        if (this.recorder.state !== 'inactive') this.recorder.stop();
+      }
+    } catch {}
+    this.stream?.getTracks().forEach(track => track.stop());
+    this.stream = null;
+    this.recorder = null;
+    this.chunks = [];
+    this.state = 'idle';
+    try { await this.bridge.disarmMicrophone(); } catch {}
+    this.onStatus('idle');
   }
 
   async finishRecording() {
