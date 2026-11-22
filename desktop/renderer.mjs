@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MyaKawaiiAnimation } from './kawaii.mjs';
 
 const ui = (id) => document.getElementById(id);
 const api = window.mya;
@@ -22,6 +23,9 @@ fillLight.position.set(-3.5, 1.4, -3.0);
 scene.add(fillLight);
 
 let character = null;
+let kawaii = null;
+let nextIdleMoment = 0;
+let previousAnimationTime = 0;
 let head = null;
 let eyeBones = [];
 let chest = null;
@@ -77,6 +81,7 @@ function moveToRest() {
   camera.updateProjectionMatrix();
 }
 function applyAvatar(gltf) {
+  if (kawaii) { kawaii.dispose(); kawaii = null; }
   if (character) scene.remove(character);
   character = gltf.scene;
   scene.add(character);
@@ -99,7 +104,19 @@ function applyAvatar(gltf) {
   characterYaw = 0;
   moveToRest();
   ui('avatar-empty').classList.add('hidden');
-  ui('avatar-status').textContent = head ? 'Mya · GLB skeleton' : 'Mya · GLB loaded (rig check required)';
+  ui('avatar-status').textContent = head ? 'Mya · loading Kawaii clips…' : 'Mya · GLB loaded (rig check required)';
+  kawaii = new MyaKawaiiAnimation(character);
+  nextIdleMoment = performance.now() + 12000;
+  kawaii.loadAll(api, text => { ui('avatar-status').textContent = text; })
+    .then(ok => {
+      if (ok && kawaii.failed.length) {
+        console.warn('Mya Kawaii retarget warnings:', kawaii.failed);
+        toast(kawaii.failed.length + ' Kawaii clips need calibration; check the Console.');
+      }
+    })
+    .catch(error => {
+      ui('avatar-status').textContent = 'Kawaii setup failed: ' + error.message;
+    });
 }
 async function loadModel() {
   try {
@@ -119,7 +136,17 @@ function frame(t) {
   if (t - lastFrameAt < interval) return;
   lastFrameAt = t;
   const elapsed = clock.getElapsedTime();
-  if (head && baseHead) {
+  const delta = previousAnimationTime ? Math.min((t - previousAnimationTime) / 1000, 0.05) : 0.016;
+  previousAnimationTime = t;
+  if (kawaii?.ready) {
+    kawaii.update(delta);
+    if (!speaking && t > nextIdleMoment) {
+      const choices = ['Idle', 'Idle', 'LookAround', 'Waiting', 'Stretch'];
+      kawaii.play(choices[Math.floor(Math.random() * choices.length)]);
+      nextIdleMoment = t + 14000 + Math.random() * 14000;
+    }
+  }
+  if ((!kawaii || !kawaii.ready) && head && baseHead) {
     const amount = speaking ? 0.38 : 1;
     const nod = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       Math.sin(elapsed * (speaking ? 3.1 : 0.7)) * 0.024 * amount,
@@ -128,7 +155,7 @@ function frame(t) {
     ));
     head.quaternion.copy(baseHead).multiply(nod);
   }
-  if (chest && baseChest) {
+  if ((!kawaii || !kawaii.ready) && chest && baseChest) {
     const breathe = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       Math.sin(elapsed * 1.6) * 0.007, 0, 0
     ));
@@ -162,8 +189,17 @@ function say(text) {
   const utterance = new SpeechSynthesisUtterance(text.slice(0, 500));
   utterance.rate = 1.03;
   utterance.pitch = 1.15;
-  utterance.onstart = () => { speaking = true; ui('state').textContent = 'Speaking'; };
-  const reset = () => { speaking = false; ui('state').textContent = 'Ready'; };
+  utterance.onstart = () => {
+    speaking = true;
+    ui('state').textContent = 'Speaking';
+    kawaii?.play('Talk');
+    nextIdleMoment = performance.now() + 16000;
+  };
+  const reset = () => {
+    speaking = false;
+    ui('state').textContent = 'Ready';
+    kawaii?.play('Idle');
+  };
   utterance.onend = reset;
   utterance.onerror = reset;
   speechSynthesis.speak(utterance);
@@ -175,6 +211,7 @@ async function sendMessage() {
   input.value = '';
   message(text, 'user');
   ui('state').textContent = 'Thinking';
+  kawaii?.play('Think');
   ui('send').disabled = true;
   try {
     const result = await api.askLocalAI(text);
@@ -228,7 +265,12 @@ async function observationSample() {
     ui('observation').textContent = (result.activity ? result.activity + ': ' : '') + summary;
     if (result.shouldSpeak && result.proposedComment && !currentSettings.quietMode) {
       message(result.proposedComment);
-      say(result.proposedComment);
+      const gesture = {
+        victory: 'Cheer', defeat: 'Concerned', repeated_error: 'Concerned',
+        funny_moment: 'Laugh', interesting_discovery: 'Think', unexpected_event: 'Surprised'
+      }[result.event];
+      if (gesture) kawaii?.play(gesture);
+      if (currentSettings.voiceEnabled) setTimeout(() => say(result.proposedComment), 750);
     }
   } catch (error) {
     ui('observation').textContent = 'Vision is unavailable: ' + error.message;
