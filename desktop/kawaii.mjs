@@ -46,8 +46,11 @@ export class MyaKawaiiAnimation {
     this.state = null;
     this.failed = [];
     this.ready = false;
-    this.mixer.addEventListener('finished', () => {
-      if (this.state !== 'Idle' && this.state !== 'Talk') this.play('Idle');
+    this.mixer.addEventListener('finished', event => {
+      // Ignore a faded-out action finishing after another gesture started.
+      if (event.action === this.activeAction &&
+          this.state !== 'Idle' && this.state !== 'Talk')
+        this.play('Idle');
     });
   }
   async loadAll(bridge, status = () => {}) {
