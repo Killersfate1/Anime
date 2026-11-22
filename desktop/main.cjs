@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { InitiativeGate } = require('./initiative.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
+const kawaiiClips = require('./animation-manifest.json');
 
 const DEFAULTS = Object.freeze({
   chatModel: 'gemma3:4b',
@@ -125,6 +126,22 @@ function parseVision(text) {
   } catch { return null; }
 }
 function registerIpc() {
+  ipcMain.handle('mya:animation-list', () =>
+    Object.keys(kawaiiClips).filter(name => {
+      const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', kawaiiClips[name].file);
+      return fs.existsSync(file);
+    })
+  );
+  ipcMain.handle('mya:animation-read', (_event, name) => {
+    // No renderer-controlled paths: only exact, repository-shipped FBX clips.
+    if (typeof name !== 'string' || !Object.hasOwn(kawaiiClips, name)) return null;
+    const entry = kawaiiClips[name];
+    const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', entry.file);
+    if (!fs.existsSync(file)) return null;
+    const bytes = fs.readFileSync(file);
+    if (bytes.length > 30 * 1024 * 1024) throw new Error('Animation clip is too large');
+    return { name, loop: !!entry.loop, base64: bytes.toString('base64') };
+  });
   ipcMain.handle('mya:model-info', () => modelInfo());
   ipcMain.handle('mya:model-read', () => {
     const p = avatarPath();
