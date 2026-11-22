@@ -358,6 +358,14 @@ async function loadSettings() {
   ui('voice-enabled').checked = currentSettings.voiceEnabled;
   ui('economy-mode').checked = currentSettings.economyMode;
   ui('quiet-mode').checked = currentSettings.quietMode;
+  for (const [field, key] of [
+    ['mouth-x', 'mouthX'], ['mouth-y', 'mouthY'], ['mouth-z', 'mouthZ'],
+    ['mouth-width', 'mouthWidth'], ['mouth-height', 'mouthHeight']
+  ]) ui(field).value = currentSettings[key];
+  ui('mouth-enabled').checked = !!currentSettings.mouthEnabled;
+  ui('mouth-face-back').checked = !!currentSettings.mouthFaceBack;
+  face?.setFallback(faceSettings());
+  faceDiagnostics();
 }
 async function saveSettings() {
   try {
@@ -367,7 +375,14 @@ async function saveSettings() {
       talkativeness: Number(ui('talkativeness').value),
       voiceEnabled: ui('voice-enabled').checked,
       economyMode: ui('economy-mode').checked,
-      quietMode: ui('quiet-mode').checked
+      quietMode: ui('quiet-mode').checked,
+      mouthEnabled: ui('mouth-enabled').checked,
+      mouthFaceBack: ui('mouth-face-back').checked,
+      mouthX: Number(ui('mouth-x').value),
+      mouthY: Number(ui('mouth-y').value),
+      mouthZ: Number(ui('mouth-z').value),
+      mouthWidth: Number(ui('mouth-width').value),
+      mouthHeight: Number(ui('mouth-height').value)
     });
     if (currentSettings.quietMode) setWatching(false);
     await loadSettings();
@@ -452,6 +467,30 @@ ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
+function previewMouthSettings() {
+  face?.setFallback({
+    enabled: ui('mouth-enabled').checked,
+    faceBack: ui('mouth-face-back').checked,
+    x: Number(ui('mouth-x').value),
+    y: Number(ui('mouth-y').value),
+    z: Number(ui('mouth-z').value),
+    width: Number(ui('mouth-width').value),
+    height: Number(ui('mouth-height').value)
+  });
+  faceDiagnostics();
+}
+for (const field of ['mouth-enabled', 'mouth-face-back', 'mouth-x', 'mouth-y', 'mouth-z', 'mouth-width', 'mouth-height'])
+  ui(field).addEventListener('input', previewMouthSettings);
+ui('preview-voice').addEventListener('click', () => {
+  if (!character) { toast('Import Mya\'s exact GLB first'); return; }
+  // Test requires no AI server or microphone permissions.
+  speechSession.speak('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?',
+    { enabled: true, rate: 0.96, pitch: 1.15 });
+});
+ui('preview-wave').addEventListener('click', () => {
+  if (!character) { toast('Import Mya\'s GLB first'); return; }
+  if (!kawaii?.play('Wave')) toast('Wave animation unavailable; check FBX retarget warnings');
+});
 ui('minimize').addEventListener('click', async () => {
   speechSession.cancel();
   await mic.cancel();
