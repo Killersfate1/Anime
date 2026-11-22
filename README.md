@@ -1,8 +1,18 @@
-# Relay Asset Studio
+# Mya / Relay AI Kawaii
+
+## Desktop companion — new source foundation
+
+A new local-first Electron desktop app is available in [`desktop/`](desktop/README.md). It provides a transparent desktop avatar window, import of the user-owned GLB, local Ollama text/vision calls, user-selected screen observation, explicit saved memories, basic voice playback, and privacy/quiet controls.
+
+**Run:** `cd desktop && npm install && npm start`. Ollama and a locally installed compatible model are needed for chat and visual analysis. See `desktop/README.md` for setup and unverified features.
+
+The exact uploaded GLB is **not** checked into GitHub: the binary upload is currently blocked by the connected GitHub writer. Import your unmodified GLB in the running desktop app. The Kawaii animation clips are in Unity; they still need desktop retargeting/export. This is **not** a finished product or a tested Windows release.
+
+## Unity Asset Studio
 
 Unity 6000.1.5f1 project for David. Open this folder in Unity Hub. The saved scene is `Assets/Relay/Scenes/CompanionPreview.unity`; the original robot is a prefab with an editable `CompanionPreview` component.
 
-This is an asset-authoring companion project, not a Unity rewrite of Relay's Electron desktop application. Chat, voice, memory and live screen viewing continue to run in Relay.
+The Unity project authors Mya's animation assets and retains its original preview. The separate `desktop/` Electron source is now present in this repository; desktop chat, local screen awareness and manually approved memory are initial implementations that still need Windows integration testing.
 
 ## Add Assets
 
