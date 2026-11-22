@@ -63,3 +63,6 @@ input[type="range"] { width: 100%; accent-color: #ef80c7; }
 #mic-status { min-height: 15px; }
 #mic-status.mic-active { color: #ff9ad6; font-weight: 650; }
 @keyframes micpulse { 50% { box-shadow: 0 0 0 5px #ff58a923; } }
+
+.chat-actions { display:flex; justify-content:flex-end; }
+.chat-actions button { padding:3px 7px; font-size:10px; background:transparent; color:#c9b1db; }
