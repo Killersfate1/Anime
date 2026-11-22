@@ -43,7 +43,7 @@ The GLB was supplied through conversation upload and **is not yet inside this re
 - **Retargeting:** GLB-to-Humanoid AvatarBuilder may reject unusual rest poses. If the auto-build reports invalid, fix its T-pose/bone orientation manually without modifying or replacing the character.
 - **Expressions/lip sync:** Need facial rig or corrective face morphs made for this exact mesh (not just audio amplitude mapped to nonexistent blendshapes). Avoid a fake "lip sync ready" label.
 - **Animation playback:** Imported FBX loop settings need runtime verification; the setup does not change the purchased assets.
-- **Screen/AI/voice/memory/internet/desktop overlay:** These Unity scripts do not implement those features. A separate initial Electron runtime now exists under `desktop/` for chat, permission-gated visual sampling, manually saved memory and system voice. It still requires integration testing, facial rigging, Kawaii desktop animation export and online research.
+- **Screen/AI/voice/memory/internet/desktop overlay:** These Unity scripts do not implement those features. A separate initial Electron runtime now exists under `desktop/` for chat, permission-gated visual sampling, manually saved memory and system voice. It still requires integration testing, facial rigging, Kawaii desktop retargeting verification and online research. A first Three.js FBX retarget bridge is implemented but visually unverified.
 - **Privacy:** Observation is OFF by default; do not connect screen/microphone data to services without explicit user approval.
 - **Distribution:** Check asset licenses before repackaging the model, Kawaii animation data, Convai SDK, or other vendor components.
 
