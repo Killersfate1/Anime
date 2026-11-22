@@ -11,6 +11,23 @@ This is an **initial executable desktop foundation**, not yet a verified, comple
 5. For screen awareness, open Screen, click Find windows, choose the specific source, and click Start watching. The indicator should say WATCHING; Stop disables it immediately. Observation starts OFF every launch.
 6. System TTS currently speaks dialogue using the installed Windows voices. **This is not yet phoneme-accurate lip sync.**
 
+## Push-to-talk voice and local speech recognition
+
+Voice input is now coded through the **🎙 microphone button**. It requires a **local whisper.cpp server** listening at `127.0.0.1:8080`, with a compatible Whisper model loaded. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Ollama supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
+
+- Click 🎙 to authorize a single microphone recording, then click again to stop (or wait up to 15 seconds).
+- Audio is converted to standard 16 kHz mono PCM WAV in memory and submitted to localhost only. No audio recordings are saved to disk by this app.
+- A persistent microphone indicator displays when capture is active. Closing or minimizing cancels recording. A locally transcribed utterance becomes a user chat message.
+- No wake word, hands-free always-listening, full-duplex barge-in, or expressive neural TTS is implemented yet. The existing voice response is system TTS, not accurate lip sync.
+
+## Conversation continuity
+
+Mya now has recent in-memory context for **12 question/answer turns**, with a **Clear session** control. This context is deliberately not saved automatically. Manually approved memories remain separate in local settings.
+
+## Verification commands
+
+Run `npm run check` to syntax-check the Electron source and `npm test` for initiative, WAV encoding, and session-context unit tests. These are not replacements for Windows Electron, microphone, Ollama, Kawaii rig, and Play Mode tests.
+
 ## Features implemented in source
 
 - Transparent, resizable, always-on-top window with draggable toolbar and Ctrl+Shift+M click-through toggle.
@@ -27,10 +44,10 @@ This is an **initial executable desktop foundation**, not yet a verified, comple
 - **Kawaii FBX in Electron:** This branch now includes `desktop/kawaii.mjs`, an experimental runtime retargeting bridge that loads 12 allowlisted FBX clips and maps the inspected bone names to the canonical GLB skeleton. **No actual Windows runtime/pose test has been run**, so hands, orientation, clip loops and facial/cloth interactions may still require corrective calibration. Unity and Three.js remain separate runtimes.
 - **Facial expressions and real lip sync:** Uploaded GLB has no morph targets/embedded animations and no verified jaw bone. Do not fake a lip-sync capability. Rig extensions require dedicated work.
 - **Screen awareness:** Only single still-frame local image analysis is implemented, not streaming game telemetry. Some Windows content can appear black or unavailable due to DRM/security. Do not claim to see unsupported windows.
-- **Microphone/STT:** Not implemented; TTS is basic system voice, not an expressive neural voice.
+- **Microphone/STT:** Local push-to-talk transcription is implemented through whisper.cpp on 127.0.0.1:8080 but not validated on the user's Windows computer. TTS is basic system voice, not an expressive neural voice.
 - **Research and tools:** No autonomous web browsing, scheduling or computer actions; these require further consent and separate modules.
 - **Memory:** Explicitly user-approved notes only; no cross-session conversation archive, semantic indexing, project memory or automatic consolidation yet.
-- **Testing:** Five pure-JS initiative logic cases passed isolated tests; source syntax checks also passed. This execution environment did not run the Windows Electron GUI, Unity editor or Ollama; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
+- **Testing:** Five pure-JS initiative logic cases passed isolated tests earlier; newer source syntax and WAV/context checks passed in isolation. The Node test suite is committed but not executed as a full Windows/Electron integration test. This execution environment did not run the Windows Electron GUI, Unity editor or Ollama; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
 
 ## Privacy
 
