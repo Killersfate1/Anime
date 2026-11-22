@@ -21,7 +21,7 @@ The GLB was supplied through conversation upload and **is not yet inside this re
 - `Assets/KAWAII_ANIMATIOMS_100/Assets/Animations` has 416 FBX animation files.
 - Example animation importer metadata declares Humanoid (`animationType: 3`).
 - `Assets/Relay` has a Unity asset-authoring preview and optional Convai demonstration.
-- The full Relay Electron desktop application (screen observation, memory, speech, AI research, overlay) is not in this repository.
+- The repository now also includes a new Electron desktop foundation in `desktop/` with optional local Ollama text/vision, transparent overlay, and explicit memory controls; it is untested on Windows and does not yet include web research or the Unity Kawaii animation retargeted into Three.js.
 
 ## New code in this branch
 
@@ -43,7 +43,7 @@ The GLB was supplied through conversation upload and **is not yet inside this re
 - **Retargeting:** GLB-to-Humanoid AvatarBuilder may reject unusual rest poses. If the auto-build reports invalid, fix its T-pose/bone orientation manually without modifying or replacing the character.
 - **Expressions/lip sync:** Need facial rig or corrective face morphs made for this exact mesh (not just audio amplitude mapped to nonexistent blendshapes). Avoid a fake "lip sync ready" label.
 - **Animation playback:** Imported FBX loop settings need runtime verification; the setup does not change the purchased assets.
-- **Screen/AI/voice/memory/internet/desktop overlay:** Not implemented by these scripts. Restore/find Relay Electron code or create a separate desktop application and integrate it through a permission-controlled event/voice interface.
+- **Screen/AI/voice/memory/internet/desktop overlay:** These Unity scripts do not implement those features. A separate initial Electron runtime now exists under `desktop/` for chat, permission-gated visual sampling, manually saved memory and system voice. It still requires integration testing, facial rigging, Kawaii desktop animation export and online research.
 - **Privacy:** Observation is OFF by default; do not connect screen/microphone data to services without explicit user approval.
 - **Distribution:** Check asset licenses before repackaging the model, Kawaii animation data, Convai SDK, or other vendor components.
 
