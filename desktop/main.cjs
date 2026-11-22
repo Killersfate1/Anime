@@ -17,7 +17,14 @@ const DEFAULTS = Object.freeze({
   talkativeness: 0.45,
   voiceEnabled: true,
   economyMode: false,
-  quietMode: false
+  quietMode: false,
+  mouthEnabled: false,
+  mouthFaceBack: false,
+  mouthX: 0,
+  mouthY: -0.10,
+  mouthZ: 0.10,
+  mouthWidth: 0.035,
+  mouthHeight: 0.010
 });
 
 let window = null;
@@ -75,7 +82,14 @@ function currentSettings() {
     talkativeness: Number.isFinite(raw.talkativeness) ? Math.min(1, Math.max(0, raw.talkativeness)) : DEFAULTS.talkativeness,
     voiceEnabled: raw.voiceEnabled === false ? false : true,
     economyMode: raw.economyMode === true,
-    quietMode: raw.quietMode === true
+    quietMode: raw.quietMode === true,
+    mouthEnabled: raw.mouthEnabled === true,
+    mouthFaceBack: raw.mouthFaceBack === true,
+    mouthX: Number.isFinite(raw.mouthX) ? Math.max(-0.35, Math.min(0.35, raw.mouthX)) : DEFAULTS.mouthX,
+    mouthY: Number.isFinite(raw.mouthY) ? Math.max(-0.40, Math.min(0.25, raw.mouthY)) : DEFAULTS.mouthY,
+    mouthZ: Number.isFinite(raw.mouthZ) ? Math.max(-0.45, Math.min(0.45, raw.mouthZ)) : DEFAULTS.mouthZ,
+    mouthWidth: Number.isFinite(raw.mouthWidth) ? Math.max(0.005, Math.min(0.10, raw.mouthWidth)) : DEFAULTS.mouthWidth,
+    mouthHeight: Number.isFinite(raw.mouthHeight) ? Math.max(0.002, Math.min(0.06, raw.mouthHeight)) : DEFAULTS.mouthHeight
   };
 }
 function avatarPath() { return userFile(path.join('models', 'mya.glb')); }
