@@ -14,24 +14,25 @@ export class MyaPushToTalk {
     this.chunks = [];
     this.timeout = null;
     this.cancelled = false;
+    this.operationId = 0;
   }
 
   async start() {
     if (this.state !== 'idle') return;
     this.state = 'requesting';
     this.cancelled = false;
+    const operation = ++this.operationId;
     this.onStatus('requesting');
     try {
       const armed = await this.bridge.armMicrophone();
       if (!armed) throw new Error('Microphone access could not be enabled');
+      if (this.cancelled || operation !== this.operationId) return;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
         video: false
       });
-      if (this.cancelled) {
+      if (this.cancelled || operation !== this.operationId) {
         stream.getTracks().forEach(track => track.stop());
-        this.state = 'idle';
-        this.onStatus('idle');
         return;
       }
       this.stream = stream;
@@ -72,6 +73,7 @@ export class MyaPushToTalk {
 
   async cancel() {
     this.cancelled = true;
+    this.operationId++;
     this.clearTimer();
     try {
       if (this.recorder) {
@@ -85,11 +87,13 @@ export class MyaPushToTalk {
     this.chunks = [];
     this.state = 'idle';
     try { await this.bridge.disarmMicrophone(); } catch {}
+    try { await this.bridge.cancelTranscription?.(); } catch {}
     this.onStatus('idle');
   }
 
   async finishRecording() {
     if (this.cancelled) return;
+    const operation = this.operationId;
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
     try {
@@ -98,19 +102,25 @@ export class MyaPushToTalk {
       if (!blob.size) throw new Error('No microphone audio was recorded');
       this.onStatus('transcribing');
       const wav = await recordedBlobToWav(blob);
+      if (this.cancelled || operation !== this.operationId) return;
       const result = await this.bridge.transcribeMicrophone(wav);
+      if (this.cancelled || operation !== this.operationId) return;
       if (!result?.text) throw new Error(result?.error || 'Local transcription produced no speech');
       await this.onText(result.text);
-    } catch (error) { this.onError(error); }
-    finally {
-      this.recorder = null;
-      this.state = 'idle';
-      this.onStatus('idle');
+    } catch (error) {
+      if (!this.cancelled && operation === this.operationId) this.onError(error);
+    } finally {
+      if (operation === this.operationId) {
+        this.recorder = null;
+        this.state = 'idle';
+        this.onStatus('idle');
+      }
     }
   }
 
   async fail(error) {
     this.cancelled = true;
+    this.operationId++;
     this.clearTimer();
     try { if (this.recorder?.state === 'recording') this.recorder.stop(); }
     catch {}
