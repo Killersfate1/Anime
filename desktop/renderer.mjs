@@ -23,6 +23,16 @@ const mic = new MyaPushToTalk(
       status === 'idle' ? '🎙' : '✕ Cancel';
     ui('mic-toggle').setAttribute('aria-pressed', status === 'recording' ? 'true' : 'false');
     ui('mic-toggle').disabled = false;
+    if (status === 'recording') {
+      kawaii?.play('Waiting');
+      face?.setEmotion('curious');
+    } else if (status === 'transcribing' || status === 'processing') {
+      kawaii?.play('Think');
+      face?.setEmotion('curious');
+    } else if (status === 'idle' && !speaking) {
+      face?.setEmotion('neutral');
+      kawaii?.play('Idle');
+    }
   },
   async (transcript) => {
     ui('chat-input').value = transcript;
