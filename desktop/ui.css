@@ -66,3 +66,10 @@ input[type="range"] { width: 100%; accent-color: #ef80c7; }
 
 .chat-actions { display:flex; justify-content:flex-end; }
 .chat-actions button { padding:3px 7px; font-size:10px; background:transparent; color:#c9b1db; }
+
+#memory-kind { width: 104px; min-width: 104px; font-size: 11px; padding: 7px 4px; }
+#memory-list { max-height: 160px; overflow: auto; display: flex; flex-direction: column; gap: 5px; }
+.memory-entry { display: flex; align-items: flex-start; gap: 6px; padding: 6px; background: #1c1529; border: 1px solid #4e395d; border-radius: 8px; }
+.memory-entry-body { flex: 1; min-width: 0; word-break: break-word; font-size: 11px; line-height: 1.4; }
+.memory-entry-kind { display: block; color: #d998d0; font-size: 10px; text-transform: capitalize; margin-bottom: 3px; }
+.memory-entry button { font-size: 10px; padding: 3px 5px; }
