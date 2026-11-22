@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MyaKawaiiAnimation } from './kawaii.mjs';
 import { MyaPushToTalk } from './voice.mjs';
+import { SpeechSync } from './speech-sync.mjs';
+import { MyaFace } from './face.mjs';
 
 const ui = (id) => document.getElementById(id);
 const api = window.mya;
@@ -47,6 +49,7 @@ scene.add(fillLight);
 
 let character = null;
 let kawaii = null;
+let face = null;
 let nextIdleMoment = 0;
 let previousAnimationTime = 0;
 let head = null;
@@ -68,6 +71,46 @@ let animationFrame = 0;
 let lastFrameAt = 0;
 const clock = new THREE.Clock();
 const loader = new GLTFLoader();
+
+const speechSession = new SpeechSync({
+  onStart: ({ emotion }) => {
+    speaking = true;
+    ui('state').textContent = 'Speaking';
+    face?.setTalking(true);
+    face?.setEmotion(emotion);
+    kawaii?.play('Talk');
+    nextIdleMoment = performance.now() + 16000;
+  },
+  onBoundary: ({ viseme, strength }) => face?.setViseme(viseme, strength),
+  onEnd: () => {
+    speaking = false;
+    face?.setTalking(false);
+    face?.setEmotion('neutral');
+    kawaii?.play('Idle');
+    ui('state').textContent = 'Ready';
+  },
+  onError: error => toast(error)
+});
+function faceSettings() {
+  return {
+    enabled: !!currentSettings.mouthEnabled,
+    faceBack: !!currentSettings.mouthFaceBack,
+    x: currentSettings.mouthX,
+    y: currentSettings.mouthY,
+    z: currentSettings.mouthZ,
+    width: currentSettings.mouthWidth,
+    height: currentSettings.mouthHeight
+  };
+}
+function faceDiagnostics() {
+  const info = face?.getDiagnostics();
+  ui('face-diagnostics').textContent = !info ? 'Import Mya\'s GLB to inspect facial controls.' :
+    'Facial channels: ' + Object.keys(info.morphChannels).length +
+    ' · Jaw: ' + (info.hasJaw ? 'yes' : 'no') +
+    ' · Head: ' + (info.hasHead ? 'yes' : 'no') +
+    ' · Overlay: ' + (info.fallbackEnabled ? 'ON (approximate)' : 'OFF');
+}
+
 
 function toast(message) {
   ui('toast').textContent = String(message).slice(0, 260);
@@ -104,10 +147,14 @@ function moveToRest() {
   camera.updateProjectionMatrix();
 }
 function applyAvatar(gltf) {
+  speechSession.cancel();
+  if (face) { face.dispose(); face = null; }
   if (kawaii) { kawaii.dispose(); kawaii = null; }
   if (character) scene.remove(character);
   character = gltf.scene;
   scene.add(character);
+  face = new MyaFace(character, faceSettings());
+  faceDiagnostics();
   // Preserve the uploaded material assignments and mesh hierarchy.
   character.traverse((node) => {
     if (node.isMesh) { node.frustumCulled = false; }
@@ -192,6 +239,7 @@ function frame(t) {
     ));
     eye.quaternion.copy(baseEyes[i]).multiply(glance);
   });
+  face?.update(delta);
   renderer.render(scene, camera);
 }
 function resize() {
@@ -207,25 +255,11 @@ resize();
 requestAnimationFrame(frame);
 
 function say(text) {
-  if (!currentSettings.voiceEnabled || !('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text.slice(0, 500));
-  utterance.rate = 1.03;
-  utterance.pitch = 1.15;
-  utterance.onstart = () => {
-    speaking = true;
-    ui('state').textContent = 'Speaking';
-    kawaii?.play('Talk');
-    nextIdleMoment = performance.now() + 16000;
-  };
-  const reset = () => {
+  if (!speechSession.speak(text, { enabled: currentSettings.voiceEnabled })) {
     speaking = false;
-    ui('state').textContent = 'Ready';
+    face?.setTalking(false);
     kawaii?.play('Idle');
-  };
-  utterance.onend = reset;
-  utterance.onerror = reset;
-  speechSynthesis.speak(utterance);
+  }
 }
 async function sendMessage() {
   const input = ui('chat-input');
@@ -406,8 +440,7 @@ ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state === 'recording') { await mic.stop(); return; }
   if (mic.state !== 'idle') return;
   // Interrupt Mya so speech doesn't contaminate the user's recording.
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
-  speaking = false;
+  speechSession.cancel();
   kawaii?.play('Idle');
   await mic.start();
 });
@@ -420,10 +453,12 @@ ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
 ui('minimize').addEventListener('click', async () => {
+  speechSession.cancel();
   await mic.cancel();
   api.minimize();
 });
 ui('quit').addEventListener('click', async () => {
+  speechSession.cancel();
   await mic.cancel();
   api.quit();
 });
@@ -478,7 +513,7 @@ ui('avatar-stage').addEventListener('pointermove', event => {
   character.rotation.y = characterYaw;
 });
 window.addEventListener('pointerup', () => { pointerX = null; });
-window.addEventListener('beforeunload', () => { mic.cancel(); });
+window.addEventListener('beforeunload', () => { speechSession.cancel(); mic.cancel(); });
 (async () => {
   try {
     await loadSettings();
