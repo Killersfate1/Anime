@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   modelInfo: () => ipcRenderer.invoke('mya:model-info'),
   loadModel: () => ipcRenderer.invoke('mya:model-read'),
   importModel: () => ipcRenderer.invoke('mya:model-import'),
+  animationList: () => ipcRenderer.invoke('mya:animation-list'),
+  readAnimation: (name) => ipcRenderer.invoke('mya:animation-read', name),
   selectSources: () => ipcRenderer.invoke('mya:sources'),
   startObservation: (sourceId) => ipcRenderer.invoke('mya:observe-start', sourceId),
   stopObservation: () => ipcRenderer.invoke('mya:observe-stop'),
