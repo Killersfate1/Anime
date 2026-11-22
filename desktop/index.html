@@ -39,9 +39,11 @@
       </div>
       <div class="composer">
         <input id="chat-input" maxlength="2000" placeholder="Talk to Mya…" aria-label="Message Mya">
+        <button id="mic-toggle" type="button" aria-pressed="false" title="Start push-to-talk microphone recording">🎙</button>
         <button id="send" class="primary" title="Send message">➤</button>
       </div>
-      <p class="hint">Local model only · Replies are not sent to a cloud service</p>
+      <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Click 🎙 to talk · Requires local whisper.cpp</p>
+      <p class="hint">Local models only · Audio is not saved or sent to cloud services</p>
     </section>
     <section id="tab-screen" class="tab-content hidden">
       <div class="control-group">
