@@ -2,16 +2,33 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Mya Local AI — first-party desktop inference
+
+**Ollama is no longer required or used by this application.** The Electron app now owns its local inference process through the open-source llama.cpp `llama-server` engine, with a user-approved GGUF model. Mya's personality, memory, streaming conversations, UI, private model selection, and controlled internet-research logic are part of this repo. The model weights and runtime executable are *not* committed or bundled; compatible open model weights are trained by their respective creators, not by Mya.
+
+### One-time Windows setup (inside the app)
+
+1. Download an official Windows build from [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases) and extract it with its accompanying DLLs.
+2. Download a compatible **instruction-tuned GGUF model** (a 2B–4B Q4 quantization is a reasonable starting point for modest hardware). Review the model's license and memory requirements.
+3. From `desktop/`, run `npm install` and `npm start`. Open **Settings → Mya Local AI Engine**, select `llama-server.exe`, select your `.gguf`, then click **Start Mya AI**.
+4. Chat in Mya. Replies stream live; **Stop response** interrupts the current generation. Recent turns remain in RAM and approved memories stay separate. Click **Stop AI** to stop the inference process.
+5. Optional: Instead of selecting each file, put `llama-server.exe` (and its DLLs) in `desktop/runtime/` and exactly one model GGUF in `desktop/runtime/models/` for auto-discovery. Those files are excluded from GitHub.
+6. Start with **GPU layers: 0** for broad compatibility. Increase only if your GPU has adequate VRAM; a large GGUF can exhaust RAM. A separate multimodal `mmproj` is required for models that need it for image vision.
+
+The engine listens only on `127.0.0.1:18931`, authenticates with a new local-only key for each launch, and does not expose its own web UI. Mya's optional external research remains disabled by default. Microphone speech recognition still requires a separate local whisper.cpp server; no cloud transcription is silently enabled.
+
+**Limitations:** No Windows model-loading or GPU test has been run from this development environment; installation, model compatibility, speech quality, memory usage, and avatar visuals must be verified on the actual PC. The inference engine is open-source third-party software, and GGUF model redistribution/commercial rights depend on the chosen weights.
+
 ## Mya's local AI girlfriend personality and internet research
 
-Mya runs conversations through your **local Ollama** model (default `gemma3:4b`). Settings now includes **Companion mode** (girlfriend, best friend, gaming partner, productivity, friendly), **Affection**, and **Talkativeness**. The default is an affectionate, lively, playful, independent anime-girlfriend personality. The model is not packaged with the application; install Ollama and a local model first.
+Mya runs conversations with the GGUF you select inside the app. Settings now includes **Companion mode** (girlfriend, best friend, gaming partner, productivity, friendly), **Affection**, and **Talkativeness**. The default is an affectionate, lively, playful, independent anime-girlfriend personality. The runtime and model files must be installed or selected locally once; no cloud model API is needed.
 
 **Internet access is optional and starts OFF.** Enable it in Settings to let Mya look up public information while keeping the chat model local. Public search engines receive a brief sanitized query only; neither saved memories nor screen captures are passed to search engines. This permission is separate from screen observation. Supported providers:
 
 - **Wikipedia**: keyless online reference searches (not reliable for live prices, product comparison, or current game patches).
 - **Brave Search**: broader web search with a user-supplied Brave Search API key stored in the app's local user-data directory. The key is never forwarded to the renderer after saving.
 
-Mya can recognize obvious user requests to look things up. If **Auto research** is checked, a local Ollama planning call can decide whether public research may help for technical/game/product questions; queries are rate-limited to 12/hour with a five-minute cache. The answer displays retrieved source buttons after the chat. All web results are untrusted data; they do not authorize purchases, sending messages, running commands or changes to accounts. Chat and local memory work without any internet research. Verify sources rather than treating a search snippet as an independently confirmed fact.
+Mya can recognize obvious user requests to look things up. If **Auto research** is checked, a private Mya GGUF planning call can decide whether public research may help for technical/game/product questions; queries are rate-limited to 12/hour with a five-minute cache. The answer displays retrieved source buttons after the chat. All web results are untrusted data; they do not authorize purchases, sending messages, running commands or changes to accounts. Chat and local memory work without any internet research. Verify sources rather than treating a search snippet as an independently confirmed fact.
 
 ## White avatar / frozen A-pose fixes
 
@@ -64,26 +81,31 @@ Electron now records renderer/GPU crashes to `mya-crashes.log` inside its user-d
 
 ## Run on Windows
 
-1. Install Node.js and Ollama. Download a local text+vision model, e.g. `ollama pull gemma3:4b`.
-2. In a terminal at repository root: `cd desktop`, `npm install`, `npm start`.
-3. Click **Import GLB / VRM** and choose your exact uploaded `7fa56a61494441448b35970c9f06a252.glb`. The app copies the bytes without changing the model to your OS user-data directory as `models/mya.glb`.
-4. Chat runs against your local Ollama model only. You can change the installed model names in Settings.
-5. For screen awareness, open Screen, click Find windows, choose the specific source, and click Start watching. The indicator should say WATCHING; Stop disables it immediately. Observation starts OFF every launch.
-6. System TTS currently speaks dialogue using the installed Windows voices. **This is not yet phoneme-accurate lip sync.**
+If your terminal already ends in `\\desktop`:
+
+```powershell
+git pull origin main
+npm install
+npm run check
+npm test
+npm start
+```
+
+In Settings, configure **Mya Local AI Engine** and start it. Import your GLB/VRM and test the avatar separately. The microphone needs local whisper.cpp; the screen observer needs a multimodal-capable GGUF and, when required, a matching mmproj GGUF. No Ollama installation is necessary.
 
 ## Mya speech + expression integration
 
-The current implementation coordinates local transcribed user speech, Ollama responses, system voice synthesis, Kawaii body gestures and a facial-control adapter. The avatar enters a waiting/thinking pose while listening/transcribing; speech start triggers an emotional gesture and then the talking animation. Ending or interrupting speech returns her to idle. There are guards against canceled transcriptions creating delayed chat messages.
+The current implementation coordinates local transcribed user speech, Mya GGUF responses, system voice synthesis, Kawaii body gestures and a facial-control adapter. The avatar enters a waiting/thinking pose while listening/transcribing; speech start triggers an emotional gesture and then the talking animation. Ending or interrupting speech returns her to idle. There are guards against canceled transcriptions creating delayed chat messages.
 
 The supplied canonical Mya GLB has **no facial morph targets or jaw bone**. The optional mouth overlay in Settings is a **calibration-only visual approximation** and starts disabled. Manually adjust X/Y/depth/width/height and flip direction if necessary. The exact character geometry is not replaced or rewritten. The system can recognize facial morphs or a jaw in future re-rigged versions without depending on this overlay.
 
-For a no-services-required animation preview, import the exact GLB, open Settings, try **Test Kawaii wave** and **Test voice + mouth**. For live services, choose **Check services** to see the validated model location, Kawaii clip count, and localhost Ollama/whisper.cpp connection status.
+For a no-services-required animation preview, import the exact GLB, open Settings, try **Test Kawaii wave** and **Test voice + mouth**. For live services, choose **Check services** to see the validated model location, Kawaii clip count, and Mya local inference/whisper.cpp status.
 
 **These are features in code, not verified visual results.** Use [ACCEPTANCE.md](ACCEPTANCE.md) for the Windows end-to-end test and clear pass/fail criteria. GitHub Actions checks syntax and unit-test logic on changes to `desktop/`; it cannot validate animations, audio devices or rendering.
 
 ## Push-to-talk voice and local speech recognition
 
-Voice input is now coded through the **🎙 microphone button**. It requires a **local whisper.cpp server** listening at `127.0.0.1:8080`, with a compatible Whisper model loaded. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Ollama supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
+Voice input is now coded through the **🎙 microphone button**. It requires a **local whisper.cpp server** listening at `127.0.0.1:8080`, with a compatible Whisper model loaded. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Mya's private GGUF engine supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
 
 - Click 🎙 to authorize a single microphone recording, then click again to stop (or wait up to 15 seconds).
 - Audio is converted to standard 16 kHz mono PCM WAV in memory and submitted to localhost only. No audio recordings are saved to disk by this app.
@@ -108,13 +130,13 @@ Screen text, OCR, and model-generated descriptions are treated as untrusted data
 
 ## Verification commands
 
-Run `npm run check` to syntax-check the Electron source and `npm test` for initiative, WAV encoding, and session-context unit tests. These are not replacements for Windows Electron, microphone, Ollama, Kawaii rig, and Play Mode tests.
+Run `npm run check` to syntax-check the Electron source and `npm test` for initiative, WAV encoding, and session-context unit tests. These are not replacements for Windows Electron, microphone, GGUF runtime, Kawaii rig, and Play Mode tests.
 
 ## Features implemented in source
 
 - Transparent, resizable, always-on-top window with draggable toolbar and Ctrl+Shift+M click-through toggle.
 - Runtime import of your exact GLB (no default substitute avatar), original mesh/material hierarchy preserved, procedural head/eye/breathing motion if the corresponding bones exist.
-- Opt-in local Ollama chat, voice output through the OS speech synthesis interface, and a screen observation loop using selected Electron desktop capture source + local vision model.
+- Opt-in local GGUF chat, voice output through the OS speech synthesis interface, and a screen observation loop using selected Electron desktop capture source + local vision model.
 - Observation is downscaled to 640×360, sampled no faster than 15s (30s economy), with abort-on-stop, screen-source validation, no stored screenshots and no cloud upload.
 - Two independent matching model observations, 0.78+ vision confidence, significance threshold, and 60s cooldown are required before proposing spontaneous commentary.
 - Quiet mode, memory opt-in, memory deletion, and local JSON settings.
@@ -123,17 +145,17 @@ Run `npm run check` to syntax-check the Electron source and `npm test` for initi
 ## Still incomplete or unverified
 
 - **GitHub model copy**: the GLB is in the ChatGPT attachment but not in the repo; the connected GitHub file writer accepts UTF-8 text only. Import from your local GLB file at runtime as above. The importer verifies the GLB's structure; the original SHA-256 is recognized, and an explicitly selected different skinned avatar requires user confirmation. A current avatar is backed up before replacement. To upload the exact GLB to public GitHub `main` from Windows, use the verified `scripts/import-mya-glb.ps1` script after checking your licensing/privacy obligations.
-- **Kawaii FBX in Electron:** This branch now includes `desktop/kawaii.mjs`, an experimental runtime retargeting bridge that loads 12 allowlisted FBX clips and maps the inspected bone names to the canonical GLB skeleton. **No actual Windows runtime/pose test has been run**, so hands, orientation, clip loops and facial/cloth interactions may still require corrective calibration. Unity and Three.js remain separate runtimes.
+- **Kawaii FBX in Electron:** The repository includes `desktop/kawaii.mjs`, an experimental runtime retargeting bridge that loads 12 allowlisted FBX clips and maps the inspected bone names to the canonical GLB skeleton. **No actual Windows runtime/pose test has been run**, so hands, orientation, clip loops and facial/cloth interactions may still require corrective calibration. Unity and Three.js remain separate runtimes.
 - **Facial expressions and real lip sync:** Uploaded GLB has no morph targets/embedded animations and no verified jaw bone. Do not fake a lip-sync capability. Rig extensions require dedicated work.
 - **Screen awareness:** Only single still-frame local image analysis is implemented, not streaming game telemetry. Some Windows content can appear black or unavailable due to DRM/security. Do not claim to see unsupported windows.
 - **Microphone/STT:** Local push-to-talk transcription is implemented through whisper.cpp on 127.0.0.1:8080 but not validated on the user's Windows computer. TTS is basic system voice, not an expressive neural voice.
 - **Research and tools:** No autonomous web browsing, scheduling or computer actions; these require further consent and separate modules.
 - **Memory:** Explicitly user-approved notes only; no cross-session conversation archive, semantic indexing, project memory or automatic consolidation yet.
-- **Testing:** Five pure-JS initiative logic cases passed isolated tests earlier; newer source syntax and WAV/context checks passed in isolation. The Node test suite is committed but not executed as a full Windows/Electron integration test. This execution environment did not run the Windows Electron GUI, Unity editor or Ollama; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
+- **Testing:** Five pure-JS initiative logic cases passed isolated tests earlier; newer source syntax and WAV/context checks passed in isolation. The Node test suite is committed but not executed as a full Windows/Electron integration test. This execution environment did not run the Windows Electron GUI, Unity editor or an actual GGUF model; visual quality, platform-specific permissions, performance and end-to-end flow require local tests. Source-level code alone is not a pass.
 
 ## Privacy
 
-No background capture at launch; a deliberate source selection and Start action are required. Every app restart stops observation. A selected frame is sent to a **locally running Ollama endpoint** at `127.0.0.1:11434`; Ollama's security/network configuration is the user's responsibility. No screenshot persistence is coded. The app only saves settings, the explicitly imported GLB copy, and manually approved memory notes.
+No background capture at launch; a deliberate source selection and Start action are required. Every app restart stops observation. A selected frame is sent to Mya's **locally managed GGUF inference engine** at `127.0.0.1:18931`; its authenticated process is started only by user action. No screenshot persistence is coded. The app only saves settings, the explicitly imported GLB copy, and manually approved memory notes.
 
 ## Integration design
 
