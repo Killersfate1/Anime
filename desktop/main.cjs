@@ -305,6 +305,7 @@ function registerIpc() {
       kawaiiClips: available,
       kawaiiExpected: Object.keys(kawaiiClips).length,
       localAI: localEngine?.status() || { state:'stopped', ready:false },
+      neuralVoice: neuralVoice?.status() || { state:'off', ready:false },
       whisper,
       screenMonitoringEnabled: observationEnabled,
       // This check cannot establish render, rigging, or phoneme quality.
@@ -803,7 +804,12 @@ function registerIpc() {
 }
 app.whenReady().then(() => {
   if (!singleInstance) return;
-  localEngine = new MyaLocalEngine({ configPath: userFile('mya-local-engine.json') });
+  localEngine = new MyaLocalEngine({
+    configPath: userFile('mya-local-engine.json'),
+    runtimeDir: app.isPackaged
+      ? path.join(process.resourcesPath, 'runtime')
+      : path.join(__dirname, 'runtime')
+  });
   neuralVoice = new MyaNeuralVoice({ dataDir:userFile('voice') });
   if (neuralVoice.installed()) {
     // Already-approved cached voice loads offline. No silent first-run download.
@@ -813,6 +819,12 @@ app.whenReady().then(() => {
   configurePermissions();
   registerIpc();
   createWindow();
+  // One launch = one Mya AI. If the bundled/selected engine and GGUF exist,
+  // Mya starts her own local brain with no additional app or server command.
+  if (localEngine.hasRuntime()) {
+    localEngine.start().catch(error =>
+      console.warn('Mya AI startup failed:', error.message));
+  }
   globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!window) return;
     ignoreMouse = !ignoreMouse;
