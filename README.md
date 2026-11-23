@@ -1,5 +1,9 @@
 # Mya / Relay AI Kawaii
 
+## Local Mya intelligence and avatar recovery
+
+Mya now has an adjustable affectionate anime-girlfriend personality implemented over local Ollama, plus opt-in, rate-limited internet searches via Wikipedia or Brave Search. Browser research is off by default and never authorizes external actions. For frozen A-poses and washed-out materials, the renderer has reduced lighting, an independent procedural animation fallback, automatic still-pose detection, and a material/texture inspector. Windows visual acceptance remains open. See [desktop/README.md](desktop/README.md).
+
 ## Avatar formats
 
 The Electron app supports both **GLB and VRM 0.x/1.0**. VRM avatars can use native humanoid mappings, expression presets and spring-bone updates when present. Character files are imported locally, not published to this public repository. After pulling changes, run `npm install` in `desktop/` to install `@pixiv/three-vrm`.
