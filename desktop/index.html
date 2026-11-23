@@ -48,7 +48,7 @@
         <button id="mic-toggle" type="button" aria-pressed="false" title="Start push-to-talk microphone recording">🎙</button>
         <button id="send" class="primary" title="Send message">➤</button>
       </div>
-      <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Click 🎙 for voice input (optional local speech recognition)</p>
+      <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Install local listening in Settings, then click 🎙 to talk</p>
       <div id="research-output" class="research-output hidden" aria-live="polite"></div>
       <p class="hint">AI conversation stays local. Internet research is optional and sends only approved search queries online.</p>
     </section>
@@ -104,6 +104,11 @@
         </label>
         <div class="controls"><button id="clear-web-key">Clear saved search key</button><span id="web-key-status" class="hint"></span></div>
         <p class="hint">Internet search is off until enabled. Queries go to your chosen provider; screen captures and saved memories do not. No purchases, logins or page actions.</p>
+      </div>
+      <div class="ai-controls" id="mya-listening">
+        <strong>Let Mya hear you</strong>
+        <p class="hint">Mya can recognize your voice locally with Whisper Tiny English. Install once with permission; then press the microphone to talk. No recording is sent to a speech service.</p>
+        <div class="controls"><button id="install-listening">Install local listening</button><span id="listening-status" class="hint">Not installed</span></div>
       </div>
       <div class="ai-controls" id="mya-neural-voice">
         <strong>Mya's beautiful voice</strong>
