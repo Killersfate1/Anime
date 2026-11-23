@@ -2,7 +2,7 @@
 
 **New:** Mya also includes optional, on-device Kokoro neural speech (Heart/Bella/Nicole voice presets), installed with explicit approval from Settings, and a packaging path for a one-launch Windows application. See [desktop/README.md](desktop/README.md).
 
-**Mya Local AI no longer requires Ollama.** The `desktop/` app manages a user-selected llama.cpp GGUF inference engine on `127.0.0.1:18931` and streams local conversation responses. Configure it in Settings; the model and runtime binaries are not committed to GitHub. See [desktop/README.md](desktop/README.md).
+**Mya does not connect to external AI services.** The `desktop/` app manages its local GGUF inference engine automatically when the required model files are present. They are not currently checked into GitHub. See [desktop/README.md](desktop/README.md).
 
 
 ## Local Mya intelligence and avatar recovery
@@ -17,7 +17,7 @@ The Electron app supports both **GLB and VRM 0.x/1.0**. VRM avatars can use nati
 
 A new local-first Electron desktop app is available in [`desktop/`](desktop/README.md). It provides a transparent desktop avatar window, a SHA-256-checked import of the canonical GLB, Mya's managed local GGUF inference text/vision, user-selected screen observation with frame-change detection, short-lived screen context, session chat history, **push-to-talk transcription through a locally running whisper.cpp server**, reviewed categorized memories with editing/export, basic system voice output, and privacy/quiet controls.
 
-**Run:** `cd desktop && npm install && npm start`. The app-managed llama.cpp engine and a selected GGUF model are required for chat/vision; local whisper.cpp on port 8080 is required for microphone transcription. Use `npm run check` and `npm test` for source-level verification. See `desktop/README.md` for setup and unverified features.
+**Run:** `cd desktop && npm install && npm start`. Conversation requires Mya's local runtime and model to be present in the build; microphone transcription still requires a locally available speech recognizer and is not yet fully integrated. Use `npm run check` and `npm test` for source-level verification. See `desktop/README.md` for setup and unverified features.
 
 The exact uploaded GLB is **not** checked into GitHub: the binary upload is currently blocked by the connected GitHub writer. Import your unmodified GLB in the running desktop app. The Kawaii FBX clips are now exposed to the desktop renderer through an allowlisted bridge, with attempted humanoid retargeting to Mya's bones. This still requires visual verification/calibration; do not treat it as a finished animation setup. This is **not** a finished product or a tested Windows release. To commit the exact GLB from your Windows machine to `main`, use `scripts/import-mya-glb.ps1` after reviewing the public-repository/license implications.
 
@@ -38,13 +38,10 @@ Unity scenes, shaders, scripts, Asset Store packages and Animator controllers do
 
 The preview robot and its materials are original. No Sidekick files or assets are included. User-imported materials are not automatically cleared for Steam distribution.
 
-## Optional Convai Preview
+## No AI service connections
 
-The imported **Convai SDK for Unity 4.6.0** is used by a separate `Relay > Open Convai Preview` scene. The original companion preview remains unchanged. This scene connects the SDK's speech-start/stop events to the original robot's gestures and uses its hands-free conversation mode. It does not replace Relay.exe's local model, share Relay history, or add Unity scripts to an exported VRM.
+Mya's chat does **not** ask users to connect Ollama, Convai, cloud AI accounts, or third-party AI endpoints. The application manages local inference automatically when its licensed model and runtime binaries are included in the build.
 
-1. Open `Relay > Open Convai Preview`, select the original robot and enter your character's ID on **Convai Character**.
-2. Configure your own credentials in **Edit > Project Settings > Convai SDK**. Never commit `Assets/Resources/ConvaiSettings.asset`; it is excluded in `.gitignore`. Do not paste a key into chat or a source file.
-3. Enter Play Mode. On **Relay Convai Companion**, explicitly press **Connect to Convai (Cloud)**. This sends microphone audio/conversation data to Convai and uses your account's service allowance. Auto-connect is disabled. Disconnect or exit Play Mode to end the session.
-4. For a blendshape-enabled character, configure the SDK's **Convai Lip Sync Component** and the matching face mapping. The original block robot has no viseme blendshapes; its bridge drives body gestures, not phoneme lip sync.
+The former custom Unity Convai preview scene, cloud-connect buttons and Mya cloud bridge scripts have been removed. The third-party Convai SDK package remains in this repository as an unused imported asset, but **Mya has no custom flow to connect to it**. Unity continues to provide avatar and animation authoring.
 
-No cloud conversation was run during setup; credentials, service quality, account limits and acoustic interruption remain unverified. Convai is proprietary under its [terms](https://convai.com/tos), not an offline model supplied by the asset download. Before a public/Steam build, use the SDK's server-issued short-lived authentication and review service and asset redistribution terms. [Official setup](https://docs.convai.com/api-docs/plugins-and-integrations/convai-unity-sdk)
+This source checkout does **not** include the GGUF language model or llama.cpp executable. Without them, Mya displays a clear missing-brain status instead of claiming that her AI is running. For a self-contained distribution, these must be bundled under appropriate licenses; see [desktop/README.md](desktop/README.md).
