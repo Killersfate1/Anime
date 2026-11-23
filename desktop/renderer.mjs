@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { MyaKawaiiAnimation } from './kawaii.mjs';
+import { MyaProceduralMotion } from './procedural-motion.mjs';
 import { MyaPushToTalk } from './voice.mjs';
 import { SpeechSync } from './speech-sync.mjs';
 import { MyaFace } from './face.mjs';
@@ -25,14 +26,14 @@ const mic = new MyaPushToTalk(
     ui('mic-toggle').setAttribute('aria-pressed', status === 'recording' ? 'true' : 'false');
     ui('mic-toggle').disabled = false;
     if (status === 'recording') {
-      kawaii?.play('Waiting');
+      playMyaGesture('Waiting');
       face?.setEmotion('curious');
     } else if (status === 'transcribing' || status === 'processing') {
-      kawaii?.play('Think');
+      playMyaGesture('Think');
       face?.setEmotion('curious');
     } else if (status === 'idle' && !speaking) {
       face?.setEmotion('neutral');
-      kawaii?.play('Idle');
+      playMyaGesture('Idle');
     }
   },
   async (transcript) => {
@@ -50,12 +51,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setClearColor(0x000000, 0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.22;
-scene.add(new THREE.HemisphereLight(0xffe5fa, 0x55416e, 2.2));
-const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+renderer.toneMappingExposure = 0.90;
+scene.add(new THREE.HemisphereLight(0xffe5fa, 0x55416e, 0.82));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.05);
 keyLight.position.set(2.0, 4.5, 3.5);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xc289ee, 1.25);
+const fillLight = new THREE.DirectionalLight(0xc289ee, 0.32);
 fillLight.position.set(-3.5, 1.4, -3.0);
 scene.add(fillLight);
 
@@ -63,6 +64,12 @@ let character = null;
 let activeVRM = null;
 let vrmBaseYaw = 0;
 let kawaii = null;
+let procedural = null;
+let preferProcedural = false;
+function playMyaGesture(name) {
+  if (!preferProcedural && kawaii?.ready && kawaii.play(name)) return true;
+  return procedural?.play(name) || false;
+}
 let face = null;
 let nextIdleMoment = 0;
 let previousAnimationTime = 0;
@@ -99,12 +106,12 @@ const speechSession = new SpeechSync({
       happy: 'Cheer', surprised: 'Surprised', concerned: 'Concerned',
       playful: 'Laugh', curious: 'Think', shy: 'Shy'
     }[emotion];
-    if (gesture && kawaii?.play(gesture)) {
+    if (gesture && playMyaGesture(gesture)) {
       emotionGestureTimeout = setTimeout(() => {
         emotionGestureTimeout = null;
-        if (speaking) kawaii?.play('Talk');
+        if (speaking) playMyaGesture('Talk');
       }, 850);
-    } else kawaii?.play('Talk');
+    } else playMyaGesture('Talk');
     nextIdleMoment = performance.now() + 16000;
   },
   onBoundary: ({ viseme, strength }) => face?.setViseme(viseme, strength),
@@ -114,7 +121,7 @@ const speechSession = new SpeechSync({
     speaking = false;
     face?.setTalking(false);
     face?.setEmotion('neutral');
-    kawaii?.play('Idle');
+    playMyaGesture('Idle');
     ui('state').textContent = 'Ready';
   },
   onError: error => toast(error)
@@ -179,6 +186,7 @@ function applyAvatar(gltf) {
   speechSession.cancel();
   if (face) { face.dispose(); face = null; }
   if (kawaii) { kawaii.dispose(); kawaii = null; }
+  if (procedural) { procedural.dispose(); procedural = null; }
   if (character) {
     scene.remove(character);
     character.traverse(object => {
@@ -217,18 +225,25 @@ function applyAvatar(gltf) {
   ui('avatar-status').textContent = activeVRM
     ? 'Mya · VRM ' + (activeVRM.meta?.metaVersion || '') + ' · Kawaii loading…'
     : head ? 'Mya · GLB · Kawaii loading…' : 'Mya · GLB loaded (rig check required)';
+  procedural = new MyaProceduralMotion(character, activeVRM);
   kawaii = new MyaKawaiiAnimation(character, activeVRM);
   nextIdleMoment = performance.now() + 12000;
-  kawaii.loadAll(api, text => { ui('avatar-status').textContent = text; })
-    .then(ok => {
-      if (ok && kawaii.failed.length) {
-        console.warn('Mya Kawaii retarget warnings:', kawaii.failed);
-        toast(kawaii.failed.length + ' Kawaii clips need calibration; check the Console.');
-      }
-    })
-    .catch(error => {
-      ui('avatar-status').textContent = 'Kawaii setup failed: ' + error.message;
-    });
+  const loadingController = kawaii;
+  kawaii.loadAll(api, text => {
+    if (kawaii === loadingController) ui('avatar-status').textContent = text;
+  }).then(ok => {
+    if (kawaii !== loadingController) return;
+    if (!ok) {
+      ui('avatar-status').textContent = 'Fallback movement active; Kawaii retarget needs calibration';
+      toast('Mya is using basic fallback movement. Kawaii FBX retarget still needs fixing.');
+    } else if (kawaii.failed.length) {
+      console.warn('Mya Kawaii retarget warnings:', kawaii.failed);
+      toast(kawaii.failed.length + ' Kawaii clips need calibration; check the Console.');
+    }
+  }).catch(error => {
+    if (kawaii === loadingController)
+      ui('avatar-status').textContent = 'Fallback movement active · ' + error.message;
+  });
 }
 async function loadModel() {
   try {
@@ -263,37 +278,16 @@ function frame(t) {
   const elapsed = clock.getElapsedTime();
   const delta = previousAnimationTime ? Math.min((t - previousAnimationTime) / 1000, 0.05) : 0.016;
   previousAnimationTime = t;
-  if (kawaii?.ready) {
-    kawaii.update(delta);
-    if (!speaking && t > nextIdleMoment) {
-      const choices = ['Idle', 'Idle', 'LookAround', 'Waiting', 'Stretch'];
-      kawaii.play(choices[Math.floor(Math.random() * choices.length)]);
-      nextIdleMoment = t + 14000 + Math.random() * 14000;
-    }
+  const useKawaii = !preferProcedural && kawaii?.ready;
+  if (useKawaii) kawaii.update(delta);
+  else procedural?.update(delta);
+  if (!speaking && t > nextIdleMoment) {
+    const choices = ['Idle', 'Idle', 'LookAround', 'Waiting', 'Stretch'];
+    playMyaGesture(choices[Math.floor(Math.random() * choices.length)]);
+    nextIdleMoment = t + 14000 + Math.random() * 14000;
   }
-  if (!activeVRM && (!kawaii || !kawaii.ready) && head && baseHead) {
-    const amount = speaking ? 0.38 : 1;
-    const nod = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-      Math.sin(elapsed * (speaking ? 3.1 : 0.7)) * 0.024 * amount,
-      Math.sin(elapsed * 0.37) * 0.037 * amount,
-      Math.sin(elapsed * 0.53) * 0.012 * amount
-    ));
-    head.quaternion.copy(baseHead).multiply(nod);
-  }
-  if (!activeVRM && (!kawaii || !kawaii.ready) && chest && baseChest) {
-    const breathe = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-      Math.sin(elapsed * 1.6) * 0.007, 0, 0
-    ));
-    chest.quaternion.copy(baseChest).multiply(breathe);
-  }
-  if (!activeVRM) eyeBones.forEach((eye, i) => {
-    if (!baseEyes[i]) return;
-    const glance = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-      Math.sin(elapsed * 0.24) * 0.024,
-      Math.sin(elapsed * 0.34) * 0.022, 0
-    ));
-    eye.quaternion.copy(baseEyes[i]).multiply(glance);
-  });
+  // The fallback maintains coherent idle motion when Kawaii retarget is
+  // missing. Do not apply separate GLB bone oscillations on top of it.
   face?.update(delta);
   // VRM.update drives native expressions, spring bones, node constraints and
   // other VRM-supported dynamic components. Keep this after face input.
@@ -316,7 +310,7 @@ function say(text) {
   if (!speechSession.speak(text, { enabled: currentSettings.voiceEnabled })) {
     speaking = false;
     face?.setTalking(false);
-    kawaii?.play('Idle');
+    playMyaGesture('Idle');
   }
 }
 async function sendMessage() {
@@ -326,7 +320,7 @@ async function sendMessage() {
   input.value = '';
   message(text, 'user');
   ui('state').textContent = 'Thinking';
-  kawaii?.play('Think');
+  playMyaGesture('Think');
   ui('send').disabled = true;
   try {
     const result = await api.askLocalAI(text);
@@ -384,7 +378,7 @@ async function observationSample() {
         victory: 'Cheer', defeat: 'Concerned', repeated_error: 'Concerned',
         funny_moment: 'Laugh', interesting_discovery: 'Think', unexpected_event: 'Surprised'
       }[result.event];
-      if (gesture) kawaii?.play(gesture);
+      if (gesture) playMyaGesture(gesture);
       if (currentSettings.voiceEnabled) setTimeout(() => say(result.proposedComment), 750);
     }
   } catch (error) {
@@ -514,7 +508,7 @@ ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state !== 'idle') { await mic.cancel(); return; }
   // Interrupt Mya so speech doesn't contaminate the user's recording.
   speechSession.cancel();
-  kawaii?.play('Idle');
+  playMyaGesture('Idle');
   await mic.start();
 });
 ui('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter') sendMessage(); });
@@ -563,7 +557,7 @@ ui('check-mya').addEventListener('click', async () => {
 });
 ui('preview-wave').addEventListener('click', () => {
   if (!character) { toast('Import Mya\'s GLB or VRM first'); return; }
-  if (!kawaii?.play('Wave')) toast('Wave animation unavailable; check FBX retarget warnings');
+  if (!playMyaGesture('Wave')) toast('Avatar rig unavailable; import a humanoid GLB or VRM');
 });
 ui('minimize').addEventListener('click', async () => {
   speechSession.cancel();
