@@ -776,6 +776,7 @@ ui('clear-projector').addEventListener('click', async () => {
 });
 ui('engine-start').addEventListener('click', async () => {
   ui('engine-start').disabled = true;
+  ui('engine-stop').disabled = false;
   ui('engine-status').textContent = 'Starting Mya local AI · loading model into memory…';
   try {
     const options = {
