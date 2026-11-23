@@ -8,7 +8,7 @@ const { InitiativeGate } = require('./initiative.cjs');
 const { ChatContext } = require('./chat-context.cjs');
 const { compareFrames } = require('./screen-change.cjs');
 const { makeMemory, validMemories, relevantMemories } = require('./memory-store.cjs');
-const { inspectGlb } = require('./avatar-validation.cjs');
+const { inspectAvatar } = require('./avatar-validation.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
 
@@ -126,45 +126,58 @@ function currentSettings() {
     mouthHeight: Number.isFinite(raw.mouthHeight) ? Math.max(0.002, Math.min(0.06, raw.mouthHeight)) : DEFAULTS.mouthHeight
   };
 }
-function avatarPath() { return userFile(path.join('models', 'mya.glb')); }
-function bundledAvatarPath() {
-  return path.join(__dirname, '..', 'Assets', 'UserAssets', 'Mya.glb');
+function avatarPath(extension = 'glb') {
+  return userFile(path.join('models', 'mya.' + extension));
+}
+function bundledAvatarPath(extension = 'glb') {
+  return path.join(__dirname, '..', 'Assets', 'UserAssets', 'Mya.' + extension);
 }
 function approvedAvatar() {
-  const approval = safeJsonRead('avatar-selection.json', null);
-  return approval && typeof approval.sha256 === 'string' ? approval : null;
+  const selected = safeJsonRead('avatar-selection.json', null);
+  return selected && typeof selected.sha256 === 'string' ? selected : null;
 }
 function validAvatarFile(candidate) {
   if (!fs.existsSync(candidate)) return null;
   try {
     const stat = fs.statSync(candidate);
     if (!stat.isFile() || stat.size < 20 || stat.size > 100 * 1024 * 1024) return null;
-    const inspection = inspectGlb(fs.readFileSync(candidate));
-    return inspection.valid ? inspection : null;
+    const inspected = inspectAvatar(fs.readFileSync(candidate), path.extname(candidate));
+    return inspected.valid ? inspected : null;
   } catch {
     return null;
   }
 }
-function verifiedAvatarPath() {
+function selectedAvatar() {
   const approved = approvedAvatar();
-  const saved = validAvatarFile(avatarPath());
-  if (saved && (saved.sha256 === canonicalAvatar.sha256 || saved.sha256 === approved?.sha256))
-    return avatarPath();
-  const bundled = validAvatarFile(bundledAvatarPath());
-  if (bundled && bundled.sha256 === canonicalAvatar.sha256)
-    return bundledAvatarPath();
+  // Prefer the explicitly approved file even if another older format remains
+  // in the folder. This supports moving from GLB to VRM and back safely.
+  const preferredExtension = approved?.extension === 'vrm' ||
+      (typeof approved?.filename === 'string' && approved.filename.toLowerCase().endsWith('.vrm'))
+    ? 'vrm' : 'glb';
+  for (const ext of [preferredExtension, preferredExtension === 'glb' ? 'vrm' : 'glb']) {
+    const candidate = avatarPath(ext);
+    const info = validAvatarFile(candidate);
+    if (info && (info.sha256 === approved?.sha256 ||
+        (ext === 'glb' && info.sha256 === canonicalAvatar.sha256)))
+      return { path: candidate, info };
+  }
+  const original = bundledAvatarPath('glb');
+  const originalInfo = validAvatarFile(original);
+  if (originalInfo && originalInfo.sha256 === canonicalAvatar.sha256)
+    return { path: original, info: originalInfo };
   return null;
 }
+function verifiedAvatarPath() {
+  return selectedAvatar()?.path || null;
+}
 function modelInfo() {
-  const candidate = verifiedAvatarPath();
-  if (!candidate) return null;
-  const info = validAvatarFile(candidate);
+  const selected = selectedAvatar();
+  if (!selected) return null;
   return {
-    file: 'mya.glb',
-    source: candidate === avatarPath() ? 'local import' : 'project Assets/UserAssets',
-    ...info,
-    format: 'glTF 2.0 GLB',
-    matchesOriginalUpload: info.sha256 === canonicalAvatar.sha256
+    file: path.basename(selected.path),
+    source: selected.path.startsWith(app.getPath('userData')) ? 'local import' : 'project Assets/UserAssets',
+    ...selected.info,
+    matchesOriginalUpload: selected.info.sha256 === canonicalAvatar.sha256
   };
 }
 function stopObservation() {
@@ -350,59 +363,59 @@ function registerIpc() {
   });
   ipcMain.handle('mya:model-info', () => modelInfo());
   ipcMain.handle('mya:model-read', () => {
-    const selected = verifiedAvatarPath();
+    const selected = selectedAvatar();
     if (!selected) return null;
-    const bytes = fs.readFileSync(selected);
-    const inspection = inspectGlb(bytes);
+    const bytes = fs.readFileSync(selected.path);
+    const inspection = inspectAvatar(bytes, path.extname(selected.path));
     if (!inspection.valid) throw new Error(inspection.reason);
-    // Structured-clone binary bytes instead of base64 encoding them into
-    // a large string and decoding a second time in the renderer.
     return { bytes: Uint8Array.from(bytes), ...modelInfo() };
   });
   ipcMain.handle('mya:model-import', async () => {
     const chosen = await dialog.showOpenDialog(window, {
-      title: 'Select Mya’s GLB character',
+      title: 'Import Mya as GLB or VRM',
       properties: ['openFile'],
-      filters: [{ name: 'glTF Binary Character', extensions: ['glb'] }]
+      filters: [{ name: 'Anime humanoid character', extensions: ['glb', 'vrm'] }]
     });
     if (chosen.canceled || chosen.filePaths.length !== 1) return null;
-    const selected = chosen.filePaths[0];
-    const stat = fs.statSync(selected);
+    const source = chosen.filePaths[0];
+    const ext = path.extname(source).toLowerCase().replace('.', '');
+    if (ext !== 'glb' && ext !== 'vrm') throw new Error('Select a .glb or .vrm file');
+    const stat = fs.statSync(source);
     if (!stat.isFile() || stat.size < 20 || stat.size > 100 * 1024 * 1024)
-      throw new Error('Select a GLB file smaller than 100 MB');
-    const bytes = fs.readFileSync(selected);
-    const result = inspectGlb(bytes);
-    if (!result.valid) throw new Error('The selected GLB cannot be used: ' + result.reason);
+      throw new Error('Select a character file smaller than 100 MB');
+    const bytes = fs.readFileSync(source);
+    const result = inspectAvatar(bytes, ext);
+    if (!result.valid) throw new Error('The selected character cannot be used: ' + result.reason);
+    const current = selectedAvatar();
+    if (current?.info.sha256 === result.sha256) return modelInfo();
 
-    const destination = avatarPath();
-    const existing = validAvatarFile(destination);
-    if (existing?.sha256 === result.sha256) return modelInfo();
-
-    const replacing = !!existing;
+    const replacing = !!current;
     const differs = result.sha256 !== canonicalAvatar.sha256;
     if (differs || replacing) {
-      const explanation = differs
-        ? 'This GLB differs from the earlier uploaded Mya file. You selected it explicitly, so you can approve it as Mya’s avatar. No generic model will be substituted.'
-        : 'You selected the original uploaded Mya GLB.';
       const answer = await dialog.showMessageBox(window, {
         type: 'warning',
-        title: 'Confirm Mya’s avatar',
-        message: replacing ? 'Replace Mya’s currently saved avatar?' : 'Use this GLB as Mya?',
-        detail: explanation + (replacing
-          ? '\\nYour existing avatar will be backed up first.'
-          : '') + '\\n\\nFile: ' + path.basename(selected) +
-          '\\nSkinned joints: ' + result.joints +
+        title: 'Confirm Mya’s selected avatar',
+        message: replacing ? 'Switch Mya to this avatar?' : 'Use this avatar for Mya?',
+        detail: (differs
+          ? 'This file is different from the earlier canonical GLB. Mya will use it only with your explicit approval.'
+          : 'This is the earlier canonical Mya model.') +
+          (replacing ? '\\nThe current imported character will be kept as a backup.' : '') +
+          '\\n\\nFile: ' + path.basename(source) +
+          '\\nFormat: ' + result.format +
+          '\\nJoints: ' + result.joints +
           '\\nSHA-256: ' + result.sha256,
-        buttons: [replacing ? 'Replace Avatar' : 'Use This Avatar', 'Cancel'],
-        cancelId: 1, defaultId: 1, noLink: true
+        buttons: [replacing ? 'Switch Avatar' : 'Use This Avatar', 'Cancel'],
+        defaultId: 1, cancelId: 1, noLink: true
       });
       if (answer.response !== 0) return null;
     }
 
+    const destination = avatarPath(ext);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
-    if (existing) {
-      const backup = destination + '.backup-' + Date.now() + '.glb';
-      fs.copyFileSync(destination, backup, fs.constants.COPYFILE_EXCL);
+    const existingDestination = validAvatarFile(destination);
+    if (existingDestination && existingDestination.sha256 !== result.sha256) {
+      fs.copyFileSync(destination, destination + '.backup-' + Date.now() + '.' + ext,
+        fs.constants.COPYFILE_EXCL);
     }
     const temporary = destination + '.tmp';
     try {
@@ -410,7 +423,8 @@ function registerIpc() {
       fs.renameSync(temporary, destination);
       writeJsonAtomic('avatar-selection.json', {
         sha256: result.sha256,
-        filename: path.basename(selected),
+        extension: ext,
+        filename: path.basename(source),
         confirmedAt: new Date().toISOString()
       });
     } finally {
