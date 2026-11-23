@@ -4,7 +4,8 @@ import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { MyaKawaiiAnimation } from './kawaii.mjs';
 import { MyaProceduralMotion } from './procedural-motion.mjs';
 import { MyaPushToTalk } from './voice.mjs';
-import { SpeechSync } from './speech-sync.mjs';
+import { SpeechSync, speechEmotion } from './speech-sync.mjs';
+import { MyaVoicePlayer } from './neural-voice-playback.mjs';
 import { MyaFace } from './face.mjs';
 
 const ui = (id) => document.getElementById(id);
@@ -221,6 +222,12 @@ const speechSession = new SpeechSync({
   },
   onError: error => toast(error)
 });
+const neuralVoicePlayer = new MyaVoicePlayer(api, {
+  onStart: () => speechSession.onStart({emotion: speechEmotion(neuralVoicePlayer.spokenText), text:neuralVoicePlayer.spokenText}),
+  onEnd: () => speechSession.onEnd(),
+  onError: error => toast('Neural voice: ' + error),
+  onLevel: level => face?.setViseme('open', level)
+});
 function faceSettings() {
   return {
     enabled: !!currentSettings.mouthEnabled,
@@ -417,6 +424,7 @@ function frame(t) {
   }
   // The fallback maintains coherent idle motion when Kawaii retarget is
   // missing. Do not apply separate GLB bone oscillations on top of it.
+  neuralVoicePlayer.update();
   face?.update(delta);
   // VRM.update drives native expressions, spring bones, node constraints and
   // other VRM-supported dynamic components. Keep this after face input.
@@ -435,8 +443,20 @@ new ResizeObserver(resize).observe(ui('avatar-stage'));
 resize();
 requestAnimationFrame(frame);
 
-function say(text) {
-  if (!speechSession.speak(text, { enabled: currentSettings.voiceEnabled })) {
+async function say(text) {
+  neuralVoicePlayer.cancel();
+  speechSession.cancel();
+  if (!currentSettings.voiceEnabled || currentSettings.quietMode) return;
+  if (currentSettings.voiceMode !== 'system') {
+    const status = await api.neuralVoiceStatus();
+    if (status.ready) {
+      neuralVoicePlayer.spokenText = text;
+      neuralVoicePlayer.speak(text);
+      return;
+    }
+    toast('Neural voice is not ready. Install voice in Settings; Windows voice used temporarily.');
+  }
+  if (!speechSession.speak(text, { enabled:true })) {
     speaking = false;
     face?.setTalking(false);
     playMyaGesture('Idle');
@@ -602,6 +622,9 @@ async function loadSettings() {
   currentSettings = await api.settings();
   ui('talkativeness').value = currentSettings.talkativeness;
   ui('voice-enabled').checked = currentSettings.voiceEnabled;
+  ui('voice-mode').value = currentSettings.voiceMode || 'neural';
+  ui('voice-name').value = currentSettings.voiceName || 'af_heart';
+  ui('voice-speed').value = currentSettings.voiceSpeed || 1;
   ui('economy-mode').checked = currentSettings.economyMode;
   ui('quiet-mode').checked = currentSettings.quietMode;
   ui('personality-mode').value = currentSettings.personalityMode || 'girlfriend';
@@ -626,6 +649,9 @@ async function saveSettings() {
     currentSettings = await api.updateSettings({
       talkativeness: Number(ui('talkativeness').value),
       voiceEnabled: ui('voice-enabled').checked,
+      voiceMode: ui('voice-mode').value,
+      voiceName: ui('voice-name').value,
+      voiceSpeed: Number(ui('voice-speed').value),
       economyMode: ui('economy-mode').checked,
       quietMode: ui('quiet-mode').checked,
       personalityMode: ui('personality-mode').value,
@@ -714,6 +740,7 @@ ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state === 'recording') { await mic.stop(); return; }
   if (mic.state !== 'idle') { await mic.cancel(); return; }
   // Interrupt Mya so speech doesn't contaminate the user's recording.
+  neuralVoicePlayer.cancel();
   speechSession.cancel();
   playMyaGesture('Idle');
   await mic.start();
@@ -726,6 +753,40 @@ ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
+function showNeuralVoiceStatus(status) {
+  ui('neural-voice-status').textContent = status.ready
+    ? 'Neural voice ready · beautiful offline speech enabled'
+    : status.state === 'installing' || status.state === 'loading'
+      ? (status.message || 'Preparing Mya voice…')
+      : status.lastError
+        ? 'Voice error: ' + status.lastError
+        : status.installed ? 'Voice installed · loading…' : 'Neural voice not installed yet';
+  ui('install-voice').disabled = status.ready || status.state === 'installing' || status.state === 'loading';
+  ui('preview-neural-voice').disabled = !status.ready;
+}
+async function refreshNeuralVoice() {
+  try { showNeuralVoiceStatus(await api.neuralVoiceStatus()); }
+  catch(error) { ui('neural-voice-status').textContent = 'Voice status error: ' + error.message; }
+}
+ui('install-voice').addEventListener('click', async () => {
+  ui('install-voice').disabled = true;
+  ui('neural-voice-status').textContent = 'Downloading Mya voice assets locally. First install requires internet…';
+  const poll = setInterval(refreshNeuralVoice, 1200);
+  try {
+    const result = await api.installNeuralVoice();
+    showNeuralVoiceStatus(result);
+    if (result.ready) toast('Mya has her neural voice! ♡');
+    else toast('Voice installation failed: ' + (result.error || result.lastError || 'unknown'));
+  } catch(error) { toast('Voice installation failed: ' + error.message); }
+  finally { clearInterval(poll); await refreshNeuralVoice(); }
+});
+ui('preview-neural-voice').addEventListener('click', async () => {
+  await saveSettings();
+  say('Hey! It’s Mya. How does my new voice sound? I’m so excited to talk with you!');
+});
+ui('stop-neural-voice').addEventListener('click', () => {
+  neuralVoicePlayer.cancel(); speechSession.cancel();
+});
 function renderEngineStatus(info) {
   if (!info) return;
   ui('engine-file').textContent = info.engineName || 'None selected';
@@ -835,8 +896,7 @@ for (const field of ['mouth-enabled', 'mouth-face-back', 'mouth-x', 'mouth-y', '
 ui('preview-voice').addEventListener('click', () => {
   if (!character) { toast('Import Mya\'s GLB or VRM first'); return; }
   // Test requires no AI server or microphone permissions.
-  speechSession.speak('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?',
-    { enabled: true, rate: 0.96, pitch: 1.15 });
+  say('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?');
 });
 ui('check-mya').addEventListener('click', async () => {
   ui('mya-diagnostics').textContent = 'Checking local services…';
@@ -859,11 +919,13 @@ ui('preview-wave').addEventListener('click', () => {
   if (!playMyaGesture('Wave')) toast('Avatar rig unavailable; import a humanoid GLB or VRM');
 });
 ui('minimize').addEventListener('click', async () => {
+  neuralVoicePlayer.cancel();
   speechSession.cancel();
   await mic.cancel();
   api.minimize();
 });
 ui('quit').addEventListener('click', async () => {
+  neuralVoicePlayer.cancel();
   speechSession.cancel();
   await mic.cancel();
   api.quit();
@@ -919,10 +981,11 @@ ui('avatar-stage').addEventListener('pointermove', event => {
   character.rotation.y = characterYaw;
 });
 window.addEventListener('pointerup', () => { pointerX = null; });
-window.addEventListener('beforeunload', () => { speechSession.cancel(); mic.cancel(); });
+window.addEventListener('beforeunload', () => { neuralVoicePlayer.dispose(); speechSession.cancel(); mic.cancel(); });
 (async () => {
   try {
     await loadSettings();
+    await refreshNeuralVoice();
     await refreshEngineStatus();
     await loadModel();
     await updateMemories();
