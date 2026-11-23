@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   transcribeMicrophone: (wav) => ipcRenderer.invoke('mya:voice-transcribe', wav),
   cancelTranscription: () => ipcRenderer.invoke('mya:voice-cancel'),
   askLocalAI: (question) => ipcRenderer.invoke('mya:chat', question),
+  openResearchSource: (url) => ipcRenderer.invoke('mya:open-source', url),
   clearSessionChat: () => ipcRenderer.invoke('mya:chat-clear'),
   settings: () => ipcRenderer.invoke('mya:settings'),
   updateSettings: (settings) => ipcRenderer.invoke('mya:settings-update', settings),
