@@ -123,6 +123,8 @@ class MemoryRepository {
     return {ok:true,id};
   }
   deleteFact(id){return this.db.prepare('DELETE FROM facts WHERE id=?').run(id).changes>0;}
+  clearFacts(){this.db.exec('DELETE FROM facts;'); return true;}
+
   addEpisode(d={}){
     const summary=clean(d.summary,1400);if(!summary)return null;
     const id=uid(),t=now();
