@@ -60,12 +60,13 @@ export class MyaVoicePlayer {
     if (generation!==this.generation) return;
     const url=URL.createObjectURL(new Blob([bytes],{type:'audio/wav'}));
     const audio=new Audio();
+    let source=null;
     this.audio=audio; this.url=url;
     audio.preload='auto'; audio.src=url;
     try {
       if (typeof AudioContext!=='undefined') {
         this.audioContext ||= new AudioContext();
-        const source=this.audioContext.createMediaElementSource(audio);
+        source=this.audioContext.createMediaElementSource(audio);
         this.analyser=this.audioContext.createAnalyser();
         this.analyser.fftSize=512;
         this.samples=new Uint8Array(this.analyser.fftSize);
@@ -73,6 +74,7 @@ export class MyaVoicePlayer {
         this.analyser.connect(this.audioContext.destination);
         await this.audioContext.resume();
       }
+      if (generation !== this.generation) return;
       await new Promise((resolve,reject)=>{
         this.playDone=resolve;
         audio.onended=()=>resolve();
@@ -90,6 +92,8 @@ export class MyaVoicePlayer {
       audio.pause(); audio.removeAttribute('src'); audio.load();
       URL.revokeObjectURL(url);
       if (this.url===url) this.url=null;
+      source?.disconnect();
+      this.analyser?.disconnect();
       this.analyser=null; this.samples=null;
       this.playDone=null;
     }
