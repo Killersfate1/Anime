@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   transcribeMicrophone: (wav) => ipcRenderer.invoke('mya:voice-transcribe', wav),
   cancelTranscription: () => ipcRenderer.invoke('mya:voice-cancel'),
   engineStatus: () => ipcRenderer.invoke('mya:engine-status'),
+  openEngineResource: (kind) => ipcRenderer.invoke('mya:engine-resource', kind),
   chooseEngineFile: (kind) => ipcRenderer.invoke('mya:engine-choose', kind),
   configureEngine: (options) => ipcRenderer.invoke('mya:engine-options', options),
   clearProjector: () => ipcRenderer.invoke('mya:engine-clear-projector'),
