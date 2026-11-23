@@ -605,14 +605,14 @@ function registerIpc() {
       filters:[{name:'JSON archive',extensions:['json']}]
     });
     if(result.canceled||!result.filePath)return {ok:false,canceled:true};
-    const conversations=memoryRepository.listConversations(1000);
+    const conversations=memoryRepository.listConversations(10000);
     const archive={
       exportedAt:new Date().toISOString(),
-      approvedMemories:readApprovedMemories(),
-      pendingCandidates:memoryRepository.facts('pending',500),
-      episodes:memoryRepository.episodes(300),
+      approvedMemories:memoryRepository.facts('active',10000),
+      pendingCandidates:memoryRepository.facts('pending',10000),
+      episodes:memoryRepository.episodes(10000),
       relationship:memoryRepository.relationship(),
-      conversations:conversations.map(c=>({...c,messages:memoryRepository.messages(c.id,100)}))
+      conversations:conversations.map(c=>({...c,messages:memoryRepository.messages(c.id,50000)}))
     };
     fs.writeFileSync(result.filePath,JSON.stringify(archive,null,2),{mode:0o600});
     return {ok:true};
