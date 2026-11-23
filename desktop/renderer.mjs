@@ -537,6 +537,7 @@ async function sendMessage() {
       bubble.textContent = result.text;
       showResearch(result.research);
       say(result.text);
+      updateMemories().catch(()=>{});
     }
   } catch(error) {
     bubble.textContent = 'Mya AI error: ' + error.message;
@@ -636,6 +637,8 @@ async function loadSettings() {
   ui('mature-banter').checked = currentSettings.matureBanter !== false;
   ui('web-enabled').checked = !!currentSettings.webEnabled;
   ui('auto-research').checked = currentSettings.autoResearch !== false;
+  ui('memory-suggestions').checked = currentSettings.memorySuggestions !== false;
+  ui('episodic-recording').checked = currentSettings.episodicRecording !== false;
   ui('web-provider').value = currentSettings.webProvider || 'wikipedia';
   ui('web-key-status').textContent = currentSettings.webKeyPresent ? 'API key saved locally' : 'No key saved';
   ui('force-procedural').checked = preferProcedural;
@@ -666,6 +669,8 @@ async function saveSettings() {
       webEnabled: ui('web-enabled').checked,
       webProvider: ui('web-provider').value,
       autoResearch: ui('auto-research').checked,
+      memorySuggestions: ui('memory-suggestions').checked,
+      episodicRecording: ui('episodic-recording').checked,
       webApiKey: ui('web-api-key').value.trim(),
       mouthEnabled: ui('mouth-enabled').checked,
       mouthFaceBack: ui('mouth-face-back').checked,
@@ -728,6 +733,83 @@ async function updateMemories() {
     row.append(body, edit, remove);
     list.append(row);
   }
+  await updateMemoryDetails();
+}
+async function updateMemoryDetails() {
+  try {
+    const [pending, episodes, conversations, relationship, embeddings] = await Promise.all([
+      api.pendingMemories(), api.episodicMemories(), api.localConversations(),
+      api.relationshipHistory(), api.embeddingStatus()
+    ]);
+    ui('memory-pending-count').textContent = pending.length
+      ? pending.length + ' facts awaiting your approval (not yet used by Mya)'
+      : 'No pending fact suggestions.';
+    ui('memory-embeddings-status').textContent=embeddings.ready
+      ? 'Offline semantic embeddings ready'
+      : embeddings.installed ? 'Model installed; not currently loaded' :
+        'Keyword search active; semantic model not installed';
+    ui('memory-embeddings-install').disabled=embeddings.ready;
+    const pendingList=ui('memory-pending');pendingList.replaceChildren();
+    for(const entry of pending.slice(0,80)){
+      const row=document.createElement('div');row.className='memory-entry';
+      const body=document.createElement('div');body.className='memory-entry-body';
+      const kind=document.createElement('span');kind.className='memory-entry-kind';
+      kind.textContent=(entry.kind||'fact')+(entry.conflictWith?' · conflicts with an existing fact':'')+
+        (entry.sensitivity==='sensitive'?' · private detail':'');
+      const content=document.createElement('span');content.textContent=entry.content;
+      body.append(kind,content);
+      const approve=document.createElement('button');approve.textContent='Remember';
+      approve.addEventListener('click',async()=>{
+        if(entry.conflictWith && !confirm('This replaces a previously approved fact. Confirm the correction?'))return;
+        const result=await api.approveMemory(entry.id);
+        if(!result.ok){toast(result.error||'Could not approve memory');return;}
+        await updateMemories();
+      });
+      const reject=document.createElement('button');reject.textContent='Forget';
+      reject.addEventListener('click',async()=>{await api.rejectMemory(entry.id);await updateMemories();});
+      row.append(body,approve,reject);pendingList.append(row);
+    }
+    const epi=ui('memory-episodes');epi.replaceChildren();
+    for(const entry of episodes.slice(0,30)){
+      const row=document.createElement('div');row.className='memory-entry';
+      const body=document.createElement('div');body.className='memory-entry-body';
+      const date=document.createElement('span');date.className='memory-entry-kind';
+      date.textContent=entry.event_at.slice(0,10)+' · '+entry.title;
+      const summary=document.createElement('span');summary.textContent=entry.summary;
+      body.append(date,summary);
+      const remove=document.createElement('button');remove.textContent='Delete';
+      remove.addEventListener('click',async()=>{await api.deleteEpisode(entry.id);await updateMemories();});
+      row.append(body,remove);epi.append(row);
+    }
+    const conv=ui('memory-conversations');conv.replaceChildren();
+    for(const entry of conversations.slice(0,35)){
+      const row=document.createElement('div');row.className='memory-entry';
+      const body=document.createElement('div');body.className='memory-entry-body';
+      const label=document.createElement('span');label.textContent=
+        'Conversation · '+entry.started_at.slice(0,16).replace('T',' ');
+      body.append(label);
+      const expand=document.createElement('button');expand.textContent='Inspect';
+      expand.addEventListener('click',async()=>{
+        const messages=await api.readConversation(entry.id);
+        body.replaceChildren(label);
+        for(const message of messages){
+          const text=document.createElement('span');
+          text.textContent=message.role+': '+message.content;
+          body.append(text);
+        }
+      });
+      const remove=document.createElement('button');remove.textContent='Delete';
+      remove.addEventListener('click',async()=>{
+        if(!confirm('Delete this saved conversation?'))return;
+        await api.deleteConversation(entry.id);await updateMemories();
+      });
+      row.append(body,expand,remove);conv.append(row);
+    }
+    ui('memory-relationship').textContent='Interactions: '+relationship.interaction_count+
+      ' · Shared experiences: '+relationship.shared_experience_count+
+      ' · Familiarity score: '+Math.round(relationship.familiarity*100)+'%'+
+      ' (conversation history only; not human emotions)';
+  } catch(error){toast('Memory inspection failed: '+error.message);}
 }
 async function importModel() {
   try {
@@ -912,6 +994,27 @@ ui('export-memories').addEventListener('click', async () => {
     if (result.ok) toast('Memory export completed.');
     else if (!result.canceled) toast('Memory export was not completed.');
   } catch (error) { toast('Export failed: ' + error.message); }
+});
+ui('memory-embeddings-install').addEventListener('click',async()=>{
+  if(!confirm('Install an Apache-2.0 offline embedding model for improved private memory recall? One-time download required.'))return;
+  ui('memory-embeddings-status').textContent='Installing neural memory embeddings locally…';
+  ui('memory-embeddings-install').disabled=true;
+  try{
+    const state=await api.installEmbeddings();
+    if(!state.ready)toast(state.error||'Semantic model installation was not completed');
+  }catch(error){toast('Could not install semantic model: '+error.message);}
+  await updateMemoryDetails();
+});
+ui('reset-personal-memory').addEventListener('click',async()=>{
+  if(!confirm('Delete ALL saved conversations, episodes, approved facts, pending memories and relationship history?'))return;
+  if(!confirm('This cannot be undone. Permanently reset all Relay personal memory?'))return;
+  const response=await api.resetAllPersonalMemory();
+  if(!response.ok){toast('Could not reset memory');return;}
+  ui('conversation').replaceChildren();
+  message('Memory reset. This is a new conversation. ♡');
+  resetMemoryEditor();
+  await updateMemories();
+  toast('All Relay personal memory erased.');
 });
 ui('erase-memories').addEventListener('click', async () => {
   if (!confirm('Permanently erase all Mya memory notes?')) return;
