@@ -67,6 +67,64 @@ let kawaii = null;
 let procedural = null;
 let preferProcedural = false;
 let movementCheck = null;
+const compatibilityMaterials = new Map();
+let compatibilityMode = false;
+function setTextureCompatibility(enabled) {
+  if (!character) return false;
+  if (!enabled) {
+    for (const [mesh, item] of compatibilityMaterials) {
+      mesh.material = item.original;
+      for (const material of item.generated) material.dispose();
+    }
+    compatibilityMaterials.clear();
+    compatibilityMode = false;
+    ui('texture-compat').textContent = 'Try texture compatibility mode';
+    return true;
+  }
+  let replaced = 0;
+  character.traverse(mesh => {
+    if (!mesh.isMesh) return;
+    const original = mesh.material;
+    const materials = Array.isArray(original) ? original : [original];
+    const generated = [];
+    const replacements = materials.map(material => {
+      // Reuse the original character's decoded color texture, never a
+      // generated substitute. MToon uses shadeMultiplyTexture in some versions.
+      const texture = material?.map || material?.baseColorTexture ||
+        material?.shadeMultiplyTexture;
+      if (!texture?.isTexture) return material;
+      const simple = new THREE.MeshBasicMaterial({
+        name: 'MyaTextureCompatibility',
+        map: texture,
+        color: 0xffffff,
+        transparent: !!material.transparent,
+        opacity: typeof material.opacity === 'number' ? material.opacity : 1,
+        alphaTest: material.alphaTest || 0,
+        side: material.side ?? THREE.FrontSide,
+        depthWrite: material.depthWrite !== false,
+        toneMapped: false
+      });
+      generated.push(simple);
+      replaced++;
+      return simple;
+    });
+    if (generated.length) {
+      compatibilityMaterials.set(mesh, { original, generated });
+      mesh.material = Array.isArray(original) ? replacements : replacements[0];
+    }
+  });
+  if (!replaced) {
+    ui('material-diagnostics').textContent +=
+      ' · No decoded texture maps available for compatibility mode';
+    compatibilityMode = false;
+    return false;
+  }
+  compatibilityMode = true;
+  ui('texture-compat').textContent = 'Restore original shaders';
+  ui('material-diagnostics').textContent +=
+    ' · Basic textured fallback ACTIVE for ' + replaced + ' materials (temporary)';
+  return true;
+}
 function inspectAvatarMaterials(gltf) {
   const materials = new Set();
   let meshes = 0, textured = 0, whiteMaterials = 0;
@@ -217,6 +275,7 @@ function moveToRest() {
 }
 function applyAvatar(gltf) {
   speechSession.cancel();
+  if (compatibilityMode) setTextureCompatibility(false);
   if (face) { face.dispose(); face = null; }
   if (kawaii) { kawaii.dispose(); kawaii = null; }
   if (procedural) { procedural.dispose(); procedural = null; }
@@ -640,6 +699,11 @@ ui('clear-web-key').addEventListener('click', async () => {
   ui('web-api-key').value = '';
   await loadSettings();
   toast('Saved search key cleared');
+});
+ui('texture-compat').addEventListener('click', () => {
+  const next = !compatibilityMode;
+  if (!setTextureCompatibility(next)) toast('No usable material textures found; check avatar diagnostics.');
+  else toast(next ? 'Using existing color textures with simpler shaders.' : 'Original VRM/GLB shaders restored.');
 });
 ui('force-procedural').addEventListener('change', () => {
   preferProcedural = ui('force-procedural').checked;
