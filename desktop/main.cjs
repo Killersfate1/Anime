@@ -20,6 +20,7 @@ const { ConversationManager } = require('./relay-core/conversation-manager.cjs')
 const { RelationshipStateManager } = require('./relay-core/relationship-state-manager.cjs');
 const { LocalEmbeddingProvider } = require('./relay-core/local-embedding-provider.cjs');
 const { MyaNeuralVoice } = require('./neural-voice.cjs');
+const { MyaLocalListening } = require('./local-listening.cjs');
 const { MyaWebResearch, explicitResearchQuery, shouldConsiderAutoresearch, cleanSearchQuery } = require('./web-research.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
@@ -104,6 +105,7 @@ let memoryRetriever = null;
 let memoryConsolidator = null;
 let embeddingProvider = null;
 let neuralVoice = null;
+let localListening = null;
 let activeChat = null;
 const webResearch = new MyaWebResearch();
 let lastApprovedSourceURLs = new Set();
@@ -331,7 +333,7 @@ function registerIpc() {
         'Assets', 'Animations', entry.file);
       return fs.existsSync(file);
     }).length;
-    const whisper = await localStatus('http://127.0.0.1:8080/');
+    const whisper = localListening?.status() || {ready:false,installed:false};
     return {
       canonicalModel: !!verifiedAvatarPath(),
       modelLocation: modelInfo()?.source || 'not imported',
@@ -418,8 +420,15 @@ function registerIpc() {
   });
   ipcMain.handle('mya:voice-cancel', () => {
     activeTranscription?.abort();
+    localListening?.cancel();
     micPermissionUntil = 0;
     return { ok: true };
+  });
+  ipcMain.handle('mya:listening-status', () => localListening.status());
+  ipcMain.handle('mya:listening-install', async event => {
+    if(!window || event.sender.id!==window.webContents.id)
+      return {ready:false,error:'Unauthorized listening installation request'};
+    return localListening.init({allowDownload:true});
   });
   ipcMain.handle('mya:voice-transcribe', async (event, raw) => {
     if (!window || event.sender.id !== window.webContents.id) return { error: 'Unauthorized microphone request' };
@@ -442,26 +451,17 @@ function registerIpc() {
     transcribing = true;
     const controller = new AbortController();
     activeTranscription = controller;
-    const timeout = setTimeout(() => controller.abort(), 45000);
     try {
-      const form = new FormData();
-      form.append('file', new Blob([data], { type: 'audio/wav' }), 'mya-microphone.wav');
-      form.append('response_format', 'json');
-      form.append('temperature', '0.0');
-      const response = await fetch('http://127.0.0.1:8080/inference', {
-        method: 'POST', body: form, signal: controller.signal
-      });
-      if (!response.ok) throw new Error('Local whisper.cpp returned HTTP ' + response.status);
-      const result = await response.json();
-      const text = cleanText(result?.text || result?.transcription || '', 2000);
-      return text ? { text } : { error: 'Whisper reported no spoken words' };
-    } catch (error) {
-      return { error: 'Voice input is not fully bundled into this development build yet. ' +
-        'Mya needs a local speech-recognition component; typed chat and her speaking voice are independent.' };
+      if(!localListening.ready)
+        return {error:'Mya’s local listening model is not installed. Open Settings and choose Install listening.'};
+      const words=await localListening.transcribe(data);
+      if(controller.signal.aborted)return {error:'Voice recording canceled'};
+      return words?{text:cleanText(words,2000)}:{error:'I could not hear clear speech. Try speaking again.'};
+    } catch(error) {
+      return {error:'Local listening: '+String(error.message||error)};
     } finally {
-      clearTimeout(timeout);
-      if (activeTranscription === controller) activeTranscription = null;
-      transcribing = false;
+      if(activeTranscription===controller)activeTranscription=null;
+      transcribing=false;
     }
   });
   ipcMain.handle('mya:model-info', () => modelInfo());
@@ -874,6 +874,7 @@ function registerIpc() {
     brainInstaller?.stop();
     localEngine?.stop();
     neuralVoice?.stop();
+    localListening?.close();
     stopObservation();
     app.quit();
   });
@@ -927,6 +928,11 @@ app.whenReady().then(() => {
       .then(result=>{if(result.ready)return memoryRetriever.indexPending(40);})
       .catch(error=>console.warn('Offline embedding initialization:',error.message));
   }
+  localListening = new MyaLocalListening({dataDir:userFile('listening')});
+  if(localListening.installed()) {
+    localListening.init({allowDownload:false}).catch(error=>
+      console.warn('Offline microphone initialization:',error.message));
+  }
   neuralVoice = new MyaNeuralVoice({ dataDir:userFile('voice') });
   if (neuralVoice.installed()) {
     // Already-approved cached voice loads offline. No silent first-run download.
@@ -956,6 +962,7 @@ app.on('before-quit', () => {
   brainInstaller?.stop();
   localEngine?.stop();
   neuralVoice?.stop();
+  localListening?.close();
   embeddingProvider?.close();
   memoryRepository?.close();
   stopObservation();
