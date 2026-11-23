@@ -1,5 +1,12 @@
 # Relay / Mya
 
+## Local relational AI memory (Steam architecture)
+
+Relay's desktop AI now has modular components for inference, persistent conversation management, SQLite WAL storage, SQLite FTS5, episodic/semantic memory, optional offline neural embeddings, candidate fact review, contradiction handling, consolidation, relationship state, and full personal data reset. All logic is separate from Unity rendering. See [Relay core architecture and commercial release gates](desktop/relay-core/README.md) and [desktop setup](desktop/README.md).
+
+The local GGUF language model and llama.cpp runtime are not present in the public source repository, and the real Windows integration has not been verified on the user's PC. This is a tested application-core milestone, not a finished Steam installer.
+
+
 **New:** Mya also includes optional, on-device Kokoro neural speech (Heart/Bella/Nicole voice presets), installed with explicit approval from Settings, and a packaging path for a one-launch Windows application. See [desktop/README.md](desktop/README.md).
 
 **Mya does not connect to external AI services.** The `desktop/` app manages its local GGUF inference engine automatically when the required model files are present. They are not currently checked into GitHub. See [desktop/README.md](desktop/README.md).
@@ -15,7 +22,7 @@ The Electron app supports both **GLB and VRM 0.x/1.0**. VRM avatars can use nati
 
 ## Desktop companion — new source foundation
 
-A new local-first Electron desktop app is available in [`desktop/`](desktop/README.md). It provides a transparent desktop avatar window, a SHA-256-checked import of the canonical GLB, Mya's managed local GGUF inference text/vision, user-selected screen observation with frame-change detection, short-lived screen context, session chat history, **push-to-talk transcription through a locally running whisper.cpp server**, reviewed categorized memories with editing/export, basic system voice output, and privacy/quiet controls.
+A new local-first Electron desktop app is available in [`desktop/`](desktop/README.md). It provides a transparent desktop avatar window, GLB/VRM import, app-managed local GGUF inference, optional screen awareness, persisted SQLite conversation history, pending/approved facts, episodic memories, local neural voice output and privacy controls. Microphone transcription still uses a separately configured local recognizer and is not yet fully bundled.
 
 **Run:** `cd desktop && npm install && npm start`. Conversation requires Mya's local runtime and model to be present in the build; microphone transcription still requires a locally available speech recognizer and is not yet fully integrated. Use `npm run check` and `npm test` for source-level verification. See `desktop/README.md` for setup and unverified features.
 
