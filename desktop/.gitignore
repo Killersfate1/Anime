@@ -1,0 +1,8 @@
+# Mya local runtime binaries and owned GGUF model files.
+# Never push third-party weights or user-approved private models by accident.
+/node_modules/
+/runtime/*
+!/runtime/README.md
+*.gguf
+*.ggml
+*.exe
