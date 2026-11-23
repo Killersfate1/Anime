@@ -30,7 +30,7 @@
 
 ## Technical limitations that block release-grade acceptance
 
-- The exact Mya GLB has **no facial morph targets and no jaw bone**. Real viseme-driven lip sync, blink and smile cannot be achieved by mapping nonexistent targets. The optional calibrated mouth overlay is reversible, but it is an approximation and must not be marketed as accurate phoneme lip sync. A new face rig or authoring pass on the canonical mesh is needed.
+- The previously uploaded Mya GLB has **no facial morph targets and no jaw bone**. Imported VRMs may have native facial expression presets and spring bones. Real viseme-driven lip sync, blink and smile cannot be achieved by mapping nonexistent targets. The optional calibrated mouth overlay is reversible, but it is an approximation and must not be marketed as accurate phoneme lip sync. A new face rig or authoring pass on the canonical mesh is needed.
 - Kawaii animation FBX retargeting runs in a Three.js bridge; it still needs visual pose calibration for this model, particularly shoulders, fingers, skirt and root pose.
 - The desktop window has not been launched in a Windows GPU environment as part of this session. Automated syntax/unit tests check logic, not actual rendering.
 - System voice is a basic OS TTS, not a high-quality expressive neural voice. The web search/tools subsystem remains incomplete.
@@ -46,3 +46,13 @@ One complete real-device interaction must be observed:
 **user talks (mic indicator active) → local transcription → Mya generates a grounded answer → voice begins → animated talk gesture and visible mouth motion → returns to idle → interruption stops speech without ghost messages.**
 
 This is still an **open acceptance gate**, not a claim that it has already passed.
+
+## Additional VRM compatibility tests
+
+1. Import a licensed VRM 0.x avatar (without distributing it). Confirm face orientation, shading, rig and spring-bone motion.
+2. Verify the Diagnostics panel identifies the selected format as `VRM 0.x`; test native preset mouth shapes and blinking while speaking.
+3. Verify experimental Kawaii idle and wave motions, and inspect skirt/fingers/shoulders for retargeting problems.
+4. Switch from VRM to GLB and back; confirm that the previously selected model remains recoverable and no unapproved replacements occur.
+5. If available, repeat with a VRM 1.0 model. Do not claim VRM 1.0 visual verification from the VRM 0.x test alone.
+
+These tests require Windows rendering and have **not** been completed in this session.
