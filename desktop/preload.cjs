@@ -22,12 +22,6 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   synthesizeNeuralVoice: (text) => ipcRenderer.invoke('mya:voice-synthesize', text),
   stopNeuralVoice: () => ipcRenderer.invoke('mya:voice-stop-speech'),
   engineStatus: () => ipcRenderer.invoke('mya:engine-status'),
-  openEngineResource: (kind) => ipcRenderer.invoke('mya:engine-resource', kind),
-  chooseEngineFile: (kind) => ipcRenderer.invoke('mya:engine-choose', kind),
-  configureEngine: (options) => ipcRenderer.invoke('mya:engine-options', options),
-  clearProjector: () => ipcRenderer.invoke('mya:engine-clear-projector'),
-  startEngine: () => ipcRenderer.invoke('mya:engine-start'),
-  stopEngine: () => ipcRenderer.invoke('mya:engine-stop'),
   cancelLocalChat: () => ipcRenderer.invoke('mya:chat-cancel'),
   onChatDelta: (fn) => {
     const handler = (_event, payload) => fn(payload);
