@@ -39,6 +39,7 @@
       </div>
       <div class="chat-actions">
         <span id="local-ai-status" class="hint">Mya: waking up…</span>
+        <button id="open-brain-setup" class="hidden">Install Mya's brain</button>
         <button id="stop-answer" disabled title="Interrupt the current local AI response">Stop response</button>
         <button id="clear-chat" title="Clear this session's conversation context">Clear session</button>
       </div>
@@ -65,6 +66,11 @@
         <strong>Mya's mind</strong>
         <p class="hint">Mya runs her own intelligence on your computer and starts automatically when its model is installed.</p>
         <p id="engine-status" class="hint" aria-live="polite">Checking Mya's brain…</p>
+        <div id="brain-install-controls" class="controls">
+          <button id="install-brain" class="primary">Install Mya's brain · ~2.5 GB</button>
+          <button id="cancel-brain-install" disabled>Cancel installation</button>
+        </div>
+        <p class="hint" id="brain-download-progress" aria-live="polite">No external AI service. A one-time, user-approved download installs the official llama.cpp CPU engine and an Apache-2.0 Qwen3-4B language model. Then Mya talks entirely offline.</p>
       </div>
       <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.90"></label>
       <div class="ai-controls">
