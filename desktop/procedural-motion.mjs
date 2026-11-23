@@ -70,8 +70,8 @@ export class MyaProceduralMotion {
     // produce visible motion without changing skeletal proportions.
     const idle = Math.sin(t * 1.65);
     const slow = Math.sin(t * 0.62);
-    let chest = 0.008 * idle, headX = 0.016 * slow, headY = 0.022 * Math.sin(t * 0.33);
-    let leftArmZ = 0.008 * idle, rightArmZ = -0.008 * idle;
+    let chest = 0.022 * idle, headX = 0.035 * slow, headY = 0.048 * Math.sin(t * 0.33);
+    let leftArmZ = 0.032 * idle, rightArmZ = -0.032 * idle;
     let leftArmX = 0, rightArmX = 0, leftElbowX = 0, rightElbowX = 0;
     const burst = Math.sin(Math.min(1, actionT / 0.34) * Math.PI / 2);
     switch (this.state) {
