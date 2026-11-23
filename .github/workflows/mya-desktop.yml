@@ -26,6 +26,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Install desktop modules (without Electron binary download)
+        run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: desktop
+      - name: Verify VRM package integration
+        run: |
+          test -f node_modules/@pixiv/three-vrm/lib/three-vrm.module.js
+          node --input-type=module -e "import('@pixiv/three-vrm').then(m => { if (!m.VRMLoaderPlugin) process.exit(1); })"
+        working-directory: desktop
       - name: JavaScript source syntax
         run: npm run check
         working-directory: desktop
