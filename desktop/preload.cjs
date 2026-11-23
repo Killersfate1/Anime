@@ -16,7 +16,19 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   disarmMicrophone: () => ipcRenderer.invoke('mya:mic-disarm'),
   transcribeMicrophone: (wav) => ipcRenderer.invoke('mya:voice-transcribe', wav),
   cancelTranscription: () => ipcRenderer.invoke('mya:voice-cancel'),
-  askLocalAI: (question) => ipcRenderer.invoke('mya:chat', question),
+  engineStatus: () => ipcRenderer.invoke('mya:engine-status'),
+  chooseEngineFile: (kind) => ipcRenderer.invoke('mya:engine-choose', kind),
+  configureEngine: (options) => ipcRenderer.invoke('mya:engine-options', options),
+  clearProjector: () => ipcRenderer.invoke('mya:engine-clear-projector'),
+  startEngine: () => ipcRenderer.invoke('mya:engine-start'),
+  stopEngine: () => ipcRenderer.invoke('mya:engine-stop'),
+  cancelLocalChat: () => ipcRenderer.invoke('mya:chat-cancel'),
+  onChatDelta: (fn) => {
+    const handler = (_event, payload) => fn(payload);
+    ipcRenderer.on('mya:chat-delta', handler);
+    return () => ipcRenderer.removeListener('mya:chat-delta', handler);
+  },
+  askLocalAI: (question, requestId) => ipcRenderer.invoke('mya:chat', question, requestId),
   openResearchSource: (url) => ipcRenderer.invoke('mya:open-source', url),
   clearSessionChat: () => ipcRenderer.invoke('mya:chat-clear'),
   settings: () => ipcRenderer.invoke('mya:settings'),
