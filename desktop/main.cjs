@@ -279,6 +279,8 @@ function registerIpc() {
     return {
       canonicalModel: !!verifiedAvatarPath(),
       modelLocation: modelInfo()?.source || 'not imported',
+      modelFormat: modelInfo()?.format || 'none',
+      matchesOriginalGLB: !!modelInfo()?.matchesOriginalUpload,
       kawaiiClips: available,
       kawaiiExpected: Object.keys(kawaiiClips).length,
       ollama, whisper,
