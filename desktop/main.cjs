@@ -571,6 +571,8 @@ function registerIpc() {
     ok:typeof id==='string' && memoryRepository.deleteEpisode(id)
   }));
   ipcMain.handle('mya:memory-conversations', () => memoryRepository.listConversations(100));
+  ipcMain.handle('mya:memory-conversation-read', (_event,id) =>
+    typeof id==='string'&&id.length<100?memoryRepository.messages(id,100):[]);
   ipcMain.handle('mya:memory-conversation-delete', (_event,id) => ({
     ok:typeof id==='string' && memoryRepository.eraseConversation(id)
   }));
