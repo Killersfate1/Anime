@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   episodicMemories: () => ipcRenderer.invoke('mya:memory-episodes'),
   deleteEpisode: (id) => ipcRenderer.invoke('mya:memory-episode-delete', id),
   localConversations: () => ipcRenderer.invoke('mya:memory-conversations'),
+  readConversation: (id) => ipcRenderer.invoke('mya:memory-conversation-read',id),
   deleteConversation: (id) => ipcRenderer.invoke('mya:memory-conversation-delete', id),
   relationshipHistory: () => ipcRenderer.invoke('mya:memory-relationship'),
   memoryRecall: (query) => ipcRenderer.invoke('mya:memory-search',query),
