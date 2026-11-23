@@ -875,8 +875,16 @@ app.whenReady().then(() => {
   // Keep a recoverable legacy copy until the SQLite transaction succeeds.
   if(memoryRepository.meta('legacy_memory_import_v1')!=='done'){
     const old = validMemories(safeJsonRead('memories.json',[]));
-    for(const item of old) memoryRepository.saveFact({...item,source:'user'},{autoApprove:true});
-    memoryRepository.setMeta('legacy_memory_import_v1','done');
+    memoryRepository.tx(()=>{
+      for(const item of old) memoryRepository.saveFact({...item,source:'user'},{autoApprove:true});
+      memoryRepository.setMeta('legacy_memory_import_v1','done');
+    });
+  }
+  // The committed migration has completed. Never retain a stale personal
+  // JSON copy that could resurrect memories later deleted from SQLite.
+  for(const legacyFile of ['memories.json','memories.json.migrated']){
+    try{fs.unlinkSync(userFile(legacyFile));}
+    catch(error){if(error.code!=='ENOENT')console.warn('Legacy memory removal:',error.message);}
   }
   embeddingProvider = new LocalEmbeddingProvider({dataDir:userFile('embeddings')});
   memoryRetriever = new MemoryRetriever(memoryRepository,{embedder:embeddingProvider});
