@@ -70,3 +70,7 @@ These tests require Windows rendering and have **not** been completed in this se
 ### Material compatibility check
 
 The GLB uploaded in chat contains four embedded WebP texture images; the VRM contains four embedded PNG textures. Verify the Settings material diagnostics. If the model still renders completely white, click **Try texture compatibility mode**. This swaps supported materials to temporary basic shaders that reuse the original decoded color maps. Restore original shaders afterward. If no maps can be found, collect the diagnostics—the problem is texture decoding or model import, not missing painted artwork. This is a reversible renderer-only test and is not proof of a universal shader fix.
+
+### VRM raw-versus-normalized rig regression
+
+Confirm the Three-VRM loader retains `autoUpdateHumanBones: false` because Mya animates raw humanoid bones. If it is true, `vrm.update()` can overwrite raw-bone Kawaii and procedural pose changes with normalized rest-pose values, causing a persistent A-pose. Verify live VRM wave/idle movement after this loader fix on Windows. Runtime visual verification remains outstanding.
