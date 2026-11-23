@@ -10,7 +10,7 @@ const types=new Set(['note','preference','project','shared_activity','conversati
 function factKey(d){
   if(d.factKey)return clean(d.factKey,160);
   const kind=d.kind||'note',name=norm(d.predicate||kind);
-  const suffix=kind==='note'||kind==='shared_activity'||kind==='conversation'
+  const suffix=!d.predicate||kind==='note'||kind==='shared_activity'||kind==='conversation'
     ?':'+crypto.createHash('sha256').update(norm(d.content)).digest('hex').slice(0,12):'';
   return norm(d.subject||'user')+'|'+name+suffix;
 }
