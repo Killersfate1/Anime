@@ -42,94 +42,197 @@ export class MyaKawaiiAnimation {
     this.mixer = new THREE.AnimationMixer(character);
     this.fbxLoader = new FBXLoader();
     this.actions = new Map();
+    this.lastUsed = new Map();
+    this.pending = new Map();
+    this.queue = Promise.resolve();
+    this.available = new Set();
+    this.bridge = null;
     this.activeAction = null;
     this.state = null;
+    this.wantedState = 'Idle';
     this.failed = [];
     this.ready = false;
+    this.disposed = false;
+    this.maxCachedActions = 4;
     this.mixer.addEventListener('finished', event => {
-      // Ignore a faded-out action finishing after another gesture started.
       if (event.action === this.activeAction &&
-          this.state !== 'Idle' && this.state !== 'Talk')
-        this.play('Idle');
+          this.state !== 'Idle' && this.state !== 'Talk') this.play('Idle');
     });
   }
+
+  // Compatibility with the old entrypoint: preload ONLY the idle action.
+  // The other 11 clips are loaded one at a time when a gesture is requested.
   async loadAll(bridge, status = () => {}) {
+    this.bridge = bridge;
     if (!this.skinnedMesh) {
-      status('GLB has no usable skinned mesh; animations unavailable.');
+      status('GLB contains no compatible skinned mesh');
       return false;
     }
-    const available = await bridge.animationList();
-    for (const state of available) {
-      try {
-        // Allow the viewport to draw between imported FBX clip parses.
-        await new Promise(resolve => setTimeout(resolve, 0));
-        const file = await bridge.readAnimation(state);
-        if (!file || !file.base64) continue;
-        const binary = Uint8Array.from(atob(file.base64), c => c.charCodeAt(0)).buffer;
-        const sourceRoot = this.fbxLoader.parse(binary, '');
-        const sourceMesh = getSkinnedMesh(sourceRoot);
-        let source = sourceMesh;
-        if (!source) {
-          const bones = [];
-          sourceRoot.traverse(node => { if (node.isBone) bones.push(node); });
-          if (!bones.length) throw new Error('FBX has no bones');
-          sourceRoot.updateMatrixWorld(true);
-          sourceRoot.skeleton = new THREE.Skeleton(bones);
-          source = sourceRoot;
-        }
-        const sourceBones = source.skeleton.bones;
-        const byNormalizedName = new Map(sourceBones.map(bone => [normalize(bone.name), bone.name]));
-        const names = {};
-        for (const targetBone of this.skinnedMesh.skeleton.bones) {
-          const expected = BONE_NAMES[keyOfTargetBone(targetBone.name)];
-          if (!expected) continue;
-          const actual = byNormalizedName.get(normalize(expected));
-          if (actual) names[targetBone.name] = actual;
-        }
-        if (Object.keys(names).length < 15) throw new Error('Less than 15 humanoid bones mapped; incompatible rig');
-        const originalClip = sourceRoot.animations?.[0];
-        if (!originalClip) throw new Error('FBX animation clip missing');
-        const clip = SkeletonUtils.retargetClip(this.skinnedMesh, source, originalClip, {
-          names,
-          hip: names[this.skinnedMesh.skeleton.bones.find(b => keyOfTargetBone(b.name) === 'pelvis')?.name] || 'Hips',
-          hipInfluence: new THREE.Vector3(0, 0, 0),
-          useFirstFramePosition: false,
-          fps: 24
-        });
-        if (!clip || !clip.tracks.length || !Number.isFinite(clip.duration) || clip.duration <= 0)
-          throw new Error('Retarget yielded empty animation');
-        clip.name = 'Mya_' + state;
-        const action = this.mixer.clipAction(clip);
-        action.setLoop(file.loop ? THREE.LoopRepeat : THREE.LoopOnce, file.loop ? Infinity : 1);
-        action.clampWhenFinished = !file.loop;
-        this.actions.set(state, action);
-      } catch (error) {
-        this.failed.push(state + ': ' + (error?.message || error));
+    try {
+      this.available = new Set(await bridge.animationList());
+      if (this.disposed) return false;
+      if (!this.available.has('Idle')) {
+        status('Kawaii idle clip is missing. Character model is preserved.');
+        return false;
       }
+      const loaded = await this._ensure('Idle');
+      if (this.disposed) return false;
+      this.ready = !!loaded && this.actions.has('Idle');
+      if (this.ready) this.play(this.wantedState || 'Idle');
+      status(this.ready
+        ? 'Kawaii idle ready; gestures load on demand'
+        : 'Kawaii retargeting unavailable; model stays visible');
+      return this.ready;
+    } catch (error) {
+      if (!this.disposed) {
+        this.failed.push('Kawaii initialization: ' + (error.message || error));
+        status('Kawaii load failed; avatar still available');
+      }
+      return false;
     }
-    this.ready = this.actions.has('Idle');
-    if (this.ready) this.play('Idle');
-    status(this.ready
-      ? 'Kawaii loaded: ' + this.actions.size + ' clips; verify pose quality in app'
-      : 'Kawaii FBX retargeting needs manual adjustment');
-    return this.ready;
   }
+
+  _ensure(state) {
+    if (this.disposed || !this.available.has(state)) return Promise.resolve(false);
+    if (this.actions.has(state)) return Promise.resolve(true);
+    if (this.pending.has(state)) return this.pending.get(state);
+
+    // Serial parsing avoids several FBX copies and animation-retarget
+    // allocations existing simultaneously in Chromium's JS heap.
+    const job = this.queue.then(() => this._loadOne(state))
+      .catch(error => {
+        if (!this.disposed)
+          this.failed.push(state + ': ' + (error?.message || error));
+        return false;
+      })
+      .finally(() => { this.pending.delete(state); });
+    this.pending.set(state, job);
+    this.queue = job.then(() => {});
+    return job;
+  }
+
+  async _loadOne(state) {
+    if (this.disposed) return false;
+    const file = await this.bridge.readAnimation(state);
+    if (this.disposed || !file || !file.bytes) return false;
+    const view = file.bytes;
+    const binary = view instanceof ArrayBuffer ? view :
+      ArrayBuffer.isView(view)
+        ? view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength)
+        : null;
+    if (!binary || binary.byteLength < 64 || binary.byteLength > 30 * 1024 * 1024)
+      throw new Error('Invalid animation payload');
+    const sourceRoot = this.fbxLoader.parse(binary, '');
+    try {
+      if (this.disposed) return false;
+      const sourceMesh = getSkinnedMesh(sourceRoot);
+      let source = sourceMesh;
+      if (!source) {
+        const bones = [];
+        sourceRoot.traverse(node => { if (node.isBone) bones.push(node); });
+        if (!bones.length) throw new Error('FBX has no bones');
+        sourceRoot.updateMatrixWorld(true);
+        sourceRoot.skeleton = new THREE.Skeleton(bones);
+        source = sourceRoot;
+      }
+
+      const byName = new Map(source.skeleton.bones.map(b => [normalize(b.name), b.name]));
+      const names = {};
+      for (const bone of this.skinnedMesh.skeleton.bones) {
+        const expected = BONE_NAMES[keyOfTargetBone(bone.name)];
+        if (!expected) continue;
+        const original = byName.get(normalize(expected));
+        if (original) names[bone.name] = original;
+      }
+      if (Object.keys(names).length < 15)
+        throw new Error('Insufficient humanoid bone mapping for Kawaii retarget');
+
+      const clip = sourceRoot.animations?.[0];
+      if (!clip) throw new Error('No animation in source FBX');
+      const pelvis = this.skinnedMesh.skeleton.bones
+        .find(b => keyOfTargetBone(b.name) === 'pelvis');
+      const retargeted = SkeletonUtils.retargetClip(this.skinnedMesh, source, clip, {
+        names,
+        hip: pelvis ? names[pelvis.name] || 'Hips' : 'Hips',
+        hipInfluence: new THREE.Vector3(0, 0, 0),
+        useFirstFramePosition: false,
+        fps: 24
+      });
+      if (!retargeted || !retargeted.tracks.length || !Number.isFinite(retargeted.duration) ||
+          retargeted.duration <= 0) throw new Error('Retarget produced no usable tracks');
+
+      retargeted.name = 'Mya_' + state;
+      if (this.disposed) return false;
+      const action = this.mixer.clipAction(retargeted);
+      action.setLoop(file.loop ? THREE.LoopRepeat : THREE.LoopOnce, file.loop ? Infinity : 1);
+      action.clampWhenFinished = !file.loop;
+      this.actions.set(state, action);
+      this.lastUsed.set(state, Date.now());
+      this._limitCache();
+      return true;
+    } finally {
+      // Temporary FBX geometries/materials are not part of the saved GLB or
+      // retargeted AnimationClip. Drop GPU resources after extracting tracks.
+      sourceRoot.traverse(object => {
+        object.geometry?.dispose?.();
+        const materials = Array.isArray(object.material) ? object.material : object.material ? [object.material] : [];
+        for (const material of materials) material.dispose?.();
+      });
+    }
+  }
+
+  _limitCache() {
+    while (this.actions.size > this.maxCachedActions) {
+      const candidates = [...this.actions.keys()]
+        .filter(state => state !== 'Idle' && state !== this.wantedState &&
+          this.actions.get(state) !== this.activeAction)
+        .sort((a,b) => (this.lastUsed.get(a) || 0) - (this.lastUsed.get(b) || 0));
+      if (!candidates.length) break;
+      const state = candidates[0];
+      const action = this.actions.get(state);
+      action.stop();
+      this.mixer.uncacheClip(action.getClip());
+      this.actions.delete(state);
+      this.lastUsed.delete(state);
+    }
+  }
+
   play(state, transitionSeconds = 0.26) {
+    if (this.disposed || !this.available.has(state)) return false;
+    this.wantedState = state;
     const next = this.actions.get(state);
-    if (!next || (this.activeAction === next && next.isRunning())) return false;
+    if (!next) {
+      this._ensure(state).then(loaded => {
+        if (loaded && !this.disposed && this.wantedState === state)
+          this.play(state, transitionSeconds);
+      });
+      return true;
+    }
+    this.lastUsed.set(state, Date.now());
+    if (this.activeAction === next && next.isRunning()) return true;
     const previous = this.activeAction;
     this.activeAction = next;
     this.state = state;
     next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1);
     if (previous && previous !== next) next.crossFadeFrom(previous, transitionSeconds, true);
     next.play();
+    this._limitCache();
     return true;
   }
-  update(deltaSeconds) { if (this.ready) this.mixer.update(Math.min(deltaSeconds, 0.05)); }
+
+  update(deltaSeconds) {
+    if (this.ready && !this.disposed)
+      this.mixer.update(Math.min(deltaSeconds, 0.05));
+  }
   dispose() {
+    this.disposed = true;
     this.mixer.stopAllAction();
     this.mixer.uncacheRoot(this.character);
     this.actions.clear();
+    this.lastUsed.clear();
+    this.available.clear();
+    this.pending.clear();
+    this.bridge = null;
     this.ready = false;
   }
 }
