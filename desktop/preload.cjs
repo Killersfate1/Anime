@@ -21,6 +21,14 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   loadNeuralVoice: () => ipcRenderer.invoke('mya:voice-load'),
   synthesizeNeuralVoice: (text) => ipcRenderer.invoke('mya:voice-synthesize', text),
   stopNeuralVoice: () => ipcRenderer.invoke('mya:voice-stop-speech'),
+  brainInstallStatus: () => ipcRenderer.invoke('mya:brain-install-status'),
+  installBrain: () => ipcRenderer.invoke('mya:brain-install'),
+  cancelBrainInstall: () => ipcRenderer.invoke('mya:brain-install-cancel'),
+  onBrainInstallProgress: (fn) => {
+    const handler = (_event, data) => fn(data);
+    ipcRenderer.on('mya:brain-install-progress', handler);
+    return () => ipcRenderer.removeListener('mya:brain-install-progress', handler);
+  },
   engineStatus: () => ipcRenderer.invoke('mya:engine-status'),
   cancelLocalChat: () => ipcRenderer.invoke('mya:chat-cancel'),
   onChatDelta: (fn) => {
