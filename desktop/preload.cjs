@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   disarmMicrophone: () => ipcRenderer.invoke('mya:mic-disarm'),
   transcribeMicrophone: (wav) => ipcRenderer.invoke('mya:voice-transcribe', wav),
   cancelTranscription: () => ipcRenderer.invoke('mya:voice-cancel'),
+  listeningStatus: () => ipcRenderer.invoke('mya:listening-status'),
+  installListening: () => ipcRenderer.invoke('mya:listening-install'),
   neuralVoiceStatus: () => ipcRenderer.invoke('mya:voice-status'),
   installNeuralVoice: () => ipcRenderer.invoke('mya:voice-install'),
   loadNeuralVoice: () => ipcRenderer.invoke('mya:voice-load'),
