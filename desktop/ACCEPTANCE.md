@@ -66,3 +66,7 @@ These tests require Windows rendering and have **not** been completed in this se
 - For broader search, choose Brave and provide an API key. Confirm rate limiting, correct citations, and that credential never appears in the UI after saving.
 
 **Not yet visually verified in the user's Windows environment.** Automated tests only cover source and isolated logic.
+
+### Material compatibility check
+
+The GLB uploaded in chat contains four embedded WebP texture images; the VRM contains four embedded PNG textures. Verify the Settings material diagnostics. If the model still renders completely white, click **Try texture compatibility mode**. This swaps supported materials to temporary basic shaders that reuse the original decoded color maps. Restore original shaders afterward. If no maps can be found, collect the diagnostics—the problem is texture decoding or model import, not missing painted artwork. This is a reversible renderer-only test and is not proof of a universal shader fix.
