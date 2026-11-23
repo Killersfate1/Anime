@@ -549,10 +549,12 @@ ui('check-mya').addEventListener('click', async () => {
   ui('mya-diagnostics').textContent = 'Checking local services…';
   try {
     const status = await api.diagnostics();
-    const model = status.canonicalModel ? 'Verified (' + status.modelLocation + ')' : 'Missing / unverified';
+    const model = status.canonicalModel
+      ? 'Verified ' + (status.modelFormat || 'avatar') + ' (' + status.modelLocation + ')'
+      : 'Missing / unverified';
     const kawaiiStatus = status.kawaiiClips + '/' + status.kawaiiExpected + ' files found';
     ui('mya-diagnostics').textContent =
-      'Canonical GLB: ' + model +
+      'Selected avatar: ' + model +
       '\nKawaii FBX: ' + kawaiiStatus +
       '\nOllama: ' + (status.ollama.reachable ? 'reachable' : 'offline') +
       '\nwhisper.cpp: ' + (status.whisper.reachable ? 'reachable' : 'offline') +
