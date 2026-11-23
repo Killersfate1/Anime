@@ -112,6 +112,7 @@ class MyaLocalEngine {
     this.starting = null;
     this.stderrTail = '';
     this.apiKey = '';
+    this.canceled = false;
     this.config = this.loadConfig();
   }
   loadConfig() {
@@ -205,10 +206,12 @@ class MyaLocalEngine {
     if (projectorPath && !isGGUF(projectorPath))
       throw new Error('Selected vision projector is not a valid GGUF file.');
     this.state = 'starting';
+    this.canceled = false;
     this.lastError = '';
     this.apiKey = crypto.randomBytes(28).toString('hex');
     this.starting = (async () => {
       const portBusy = await this._health(500);
+      if (this.canceled) return this.status();
       if (portBusy) throw new Error('Inference port ' + this.port + ' is occupied by another server. Close it first.');
       const args = ['--model', modelPath, '--host', HOST, '--port', String(this.port),
         '--ctx-size', String(contextSize), '--n-gpu-layers', String(gpuLayers),
@@ -242,6 +245,7 @@ class MyaLocalEngine {
       });
       const began = Date.now();
       while (Date.now() - began < READY_TIMEOUT_MS) {
+        if (this.canceled) return this.status();
         if (!this.child || this.state === 'error')
           throw new Error(this.lastError || 'Local inference engine exited before loading the model.');
         if (await this._health()) {
@@ -252,6 +256,11 @@ class MyaLocalEngine {
       }
       throw new Error('Local model did not become ready within two minutes. Try a smaller GGUF or fewer GPU layers.');
     })().catch(error => {
+      if (this.canceled) {
+        this.state = 'stopped';
+        this.lastError = '';
+        return this.status();
+      }
       this.lastError = error.message;
       this.stop();
       this.state = 'error';
@@ -260,6 +269,7 @@ class MyaLocalEngine {
     return this.starting;
   }
   stop() {
+    this.canceled = true;
     this.state = 'stopped';
     this.apiKey = '';
     if (this.child) {
