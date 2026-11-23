@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { MyaKawaiiAnimation } from './kawaii.mjs';
 import { MyaPushToTalk } from './voice.mjs';
 import { SpeechSync } from './speech-sync.mjs';
@@ -59,6 +60,8 @@ fillLight.position.set(-3.5, 1.4, -3.0);
 scene.add(fillLight);
 
 let character = null;
+let activeVRM = null;
+let vrmBaseYaw = 0;
 let kawaii = null;
 let face = null;
 let nextIdleMoment = 0;
@@ -82,6 +85,7 @@ let animationFrame = 0;
 let lastFrameAt = 0;
 const clock = new THREE.Clock();
 const loader = new GLTFLoader();
+loader.register(parser => new VRMLoaderPlugin(parser));
 let emotionGestureTimeout = null;
 
 const speechSession = new SpeechSync({
@@ -129,7 +133,8 @@ function faceSettings() {
 function faceDiagnostics() {
   const info = face?.getDiagnostics();
   ui('face-diagnostics').textContent = !info ? 'Import Mya\'s GLB to inspect facial controls.' :
-    'Facial channels: ' + Object.keys(info.morphChannels).length +
+    (info.vrmVersion !== null ? 'VRM v' + info.vrmVersion + ' · Native expressions: ' +
+      info.vrmExpressions.length : 'GLB facial morphs: ' + Object.keys(info.morphChannels).length) +
     ' · Jaw: ' + (info.hasJaw ? 'yes' : 'no') +
     ' · Head: ' + (info.hasHead ? 'yes' : 'no') +
     ' · Overlay: ' + (info.fallbackEnabled ? 'ON (approximate)' : 'OFF');
@@ -174,10 +179,21 @@ function applyAvatar(gltf) {
   speechSession.cancel();
   if (face) { face.dispose(); face = null; }
   if (kawaii) { kawaii.dispose(); kawaii = null; }
-  if (character) scene.remove(character);
-  character = gltf.scene;
+  if (character) {
+    scene.remove(character);
+    character.traverse(object => {
+      object.geometry?.dispose?.();
+      const materials = Array.isArray(object.material) ? object.material :
+        object.material ? [object.material] : [];
+      for (const material of materials) material.dispose?.();
+    });
+  }
+  activeVRM = gltf.userData?.vrm || null;
+  if (activeVRM?.meta?.metaVersion === '0') VRMUtils.rotateVRM0(activeVRM);
+  character = activeVRM?.scene || gltf.scene;
+  vrmBaseYaw = character.rotation.y;
   scene.add(character);
-  face = new MyaFace(character, faceSettings());
+  face = new MyaFace(character, faceSettings(), activeVRM);
   faceDiagnostics();
   // Preserve the uploaded material assignments and mesh hierarchy.
   character.traverse((node) => {
@@ -195,11 +211,13 @@ function applyAvatar(gltf) {
   baseHead = head?.quaternion.clone() || null;
   baseChest = chest?.quaternion.clone() || null;
   baseEyes = eyeBones.map(node => node.quaternion.clone());
-  characterYaw = 0;
+  characterYaw = vrmBaseYaw;
   moveToRest();
   ui('avatar-empty').classList.add('hidden');
-  ui('avatar-status').textContent = head ? 'Mya · loading Kawaii clips…' : 'Mya · GLB loaded (rig check required)';
-  kawaii = new MyaKawaiiAnimation(character);
+  ui('avatar-status').textContent = activeVRM
+    ? 'Mya · VRM ' + (activeVRM.meta?.metaVersion || '') + ' · Kawaii loading…'
+    : head ? 'Mya · GLB · Kawaii loading…' : 'Mya · GLB loaded (rig check required)';
+  kawaii = new MyaKawaiiAnimation(character, activeVRM);
   nextIdleMoment = performance.now() + 12000;
   kawaii.loadAll(api, text => { ui('avatar-status').textContent = text; })
     .then(ok => {
@@ -217,7 +235,7 @@ async function loadModel() {
     const data = await api.loadModel();
     if (!data) {
       ui('avatar-empty').classList.remove('hidden');
-      ui('avatar-status').textContent = 'Import original GLB';
+      ui('avatar-status').textContent = 'Import GLB or VRM';
       return;
     }
     // IPC sends binary bytes directly. Avoid multi-megabyte base64 strings,
@@ -227,8 +245,14 @@ async function loadModel() {
       ArrayBuffer.isView(payload) ?
         payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) :
         null;
-    if (!binary) throw new Error('The avatar importer returned no GLB binary data');
-    loader.parse(binary, '', applyAvatar, error => toast('GLB load failed: ' + error.message));
+    if (!binary) throw new Error('The avatar importer returned no GLB/VRM binary data');
+    loader.parse(binary, '', gltf => {
+      if (data.vrmVersion && !gltf.userData?.vrm) {
+        toast('VRM metadata was found, but the VRM loader could not initialize this character.');
+        return;
+      }
+      applyAvatar(gltf);
+    }, error => toast('Character load failed: ' + error.message));
   } catch (error) { toast('GLB read failed: ' + error.message); }
 }
 function frame(t) {
@@ -247,7 +271,7 @@ function frame(t) {
       nextIdleMoment = t + 14000 + Math.random() * 14000;
     }
   }
-  if ((!kawaii || !kawaii.ready) && head && baseHead) {
+  if (!activeVRM && (!kawaii || !kawaii.ready) && head && baseHead) {
     const amount = speaking ? 0.38 : 1;
     const nod = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       Math.sin(elapsed * (speaking ? 3.1 : 0.7)) * 0.024 * amount,
@@ -256,13 +280,13 @@ function frame(t) {
     ));
     head.quaternion.copy(baseHead).multiply(nod);
   }
-  if ((!kawaii || !kawaii.ready) && chest && baseChest) {
+  if (!activeVRM && (!kawaii || !kawaii.ready) && chest && baseChest) {
     const breathe = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       Math.sin(elapsed * 1.6) * 0.007, 0, 0
     ));
     chest.quaternion.copy(baseChest).multiply(breathe);
   }
-  eyeBones.forEach((eye, i) => {
+  if (!activeVRM) eyeBones.forEach((eye, i) => {
     if (!baseEyes[i]) return;
     const glance = new THREE.Quaternion().setFromEuler(new THREE.Euler(
       Math.sin(elapsed * 0.24) * 0.024,
@@ -271,6 +295,9 @@ function frame(t) {
     eye.quaternion.copy(baseEyes[i]).multiply(glance);
   });
   face?.update(delta);
+  // VRM.update drives native expressions, spring bones, node constraints and
+  // other VRM-supported dynamic components. Keep this after face input.
+  activeVRM?.update(delta);
   renderer.render(scene, camera);
 }
 function resize() {
@@ -493,7 +520,7 @@ ui('mic-toggle').addEventListener('click', async () => {
 ui('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter') sendMessage(); });
 ui('import-model').addEventListener('click', importModel);
 ui('change-avatar').addEventListener('click', importModel);
-ui('avatar-recenter').addEventListener('click', () => { characterYaw = 0; moveToRest(); });
+ui('avatar-recenter').addEventListener('click', () => { characterYaw = vrmBaseYaw; moveToRest(); });
 ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
@@ -513,7 +540,7 @@ function previewMouthSettings() {
 for (const field of ['mouth-enabled', 'mouth-face-back', 'mouth-x', 'mouth-y', 'mouth-z', 'mouth-width', 'mouth-height'])
   ui(field).addEventListener('input', previewMouthSettings);
 ui('preview-voice').addEventListener('click', () => {
-  if (!character) { toast('Import Mya\'s exact GLB first'); return; }
+  if (!character) { toast('Import Mya\'s GLB or VRM first'); return; }
   // Test requires no AI server or microphone permissions.
   speechSession.speak('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?',
     { enabled: true, rate: 0.96, pitch: 1.15 });
@@ -533,7 +560,7 @@ ui('check-mya').addEventListener('click', async () => {
   } catch (error) { ui('mya-diagnostics').textContent = 'Diagnostics failed: ' + error.message; }
 });
 ui('preview-wave').addEventListener('click', () => {
-  if (!character) { toast('Import Mya\'s GLB first'); return; }
+  if (!character) { toast('Import Mya\'s GLB or VRM first'); return; }
   if (!kawaii?.play('Wave')) toast('Wave animation unavailable; check FBX retarget warnings');
 });
 ui('minimize').addEventListener('click', async () => {
