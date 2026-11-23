@@ -2,9 +2,21 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## GLB and VRM character support
+
+The Mya desktop app accepts **both `.glb` and `.vrm`** through the same Import/Change Avatar button. VRM 0.x and VRM 1.0 are interpreted with the local `@pixiv/three-vrm` loader; GLB support remains unchanged. Every user-selected avatar must include a usable skinned humanoid model, embedded assets and a valid glTF binary structure. A `.vrm` must contain the appropriate VRM extension.
+
+- VRM avatars use their native expression presets (including available vowel mouth shapes, smile/sad and blink), their standardized humanoid bone mappings, and their built-in spring-bone updates when the file provides those features.
+- The 12 imported Kawaii FBX clips still load **lazily**, with experimental humanoid retargeting for either format. Rig quality, poses, fingers and garment collisions need visual verification in the app.
+- VRM 0.x has an automatic orientation correction. VRM 1.0 uses its native orientation.
+- The original GLB and any VRM file remain separate, with only a user-confirmed avatar selected. Existing files aren't silently discarded. Avatar files are stored locally, never automatically committed to GitHub.
+- Imported VRM usage rights are defined by the model's embedded license. In particular, the previously supplied VRM disallows redistribution, modification and commercial use: **do not commit or distribute that model** without appropriate permission.
+
+**After pulling `main`, run `npm install` again** to install `@pixiv/three-vrm` before running `npm start`. No CDN or external model server is needed to render an imported VRM.
+
 ## Windows startup and model-import recovery
 
-The previous hard-coded model-hash refusal was replaced with **GLB structure validation and an explicit confirmation dialog**. The original uploaded Mya GLB is still recognized by SHA-256. If you intentionally select a different GLB with a usable skinned rig, Mya warns that it differs, shows the file/hash/joint count, and lets you approve it. Existing avatars are backed up before replacement. User-approved model selection is stored locally; no avatar bytes are published to GitHub. External buffers and remote textures are rejected, so import a self-contained GLB.
+The previous hard-coded model-hash refusal was replaced with **GLB/VRM structure validation and an explicit confirmation dialog**. The original uploaded Mya GLB is still recognized by SHA-256. If you intentionally select a different GLB with a usable skinned rig, Mya warns that it differs, shows the file/hash/joint count, and lets you approve it. Existing avatars are backed up before replacement. User-approved model selection is stored locally; no avatar bytes are published to GitHub. External buffers and remote textures are rejected, so import a self-contained GLB.
 
 To update an already cloned copy from its `desktop` folder:
 
@@ -33,7 +45,7 @@ Electron now records renderer/GPU crashes to `mya-crashes.log` inside its user-d
 
 1. Install Node.js and Ollama. Download a local text+vision model, e.g. `ollama pull gemma3:4b`.
 2. In a terminal at repository root: `cd desktop`, `npm install`, `npm start`.
-3. Click **Import Mya's GLB** and choose your exact uploaded `7fa56a61494441448b35970c9f06a252.glb`. The app copies the bytes without changing the model to your OS user-data directory as `models/mya.glb`.
+3. Click **Import GLB / VRM** and choose your exact uploaded `7fa56a61494441448b35970c9f06a252.glb`. The app copies the bytes without changing the model to your OS user-data directory as `models/mya.glb`.
 4. Chat runs against your local Ollama model only. You can change the installed model names in Settings.
 5. For screen awareness, open Screen, click Find windows, choose the specific source, and click Start watching. The indicator should say WATCHING; Stop disables it immediately. Observation starts OFF every launch.
 6. System TTS currently speaks dialogue using the installed Windows voices. **This is not yet phoneme-accurate lip sync.**
