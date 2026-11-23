@@ -99,9 +99,11 @@ async function parseSSE(response, onDelta, signal) {
   return text.trim();
 }
 class MyaLocalEngine {
-  constructor({ configPath, fetchImpl = fetch, spawnImpl = spawn, port = PORT } = {}) {
+  constructor({ configPath, runtimeDir = path.join(__dirname,'runtime'),
+    fetchImpl = fetch, spawnImpl = spawn, port = PORT } = {}) {
     if (!configPath) throw new Error('Local runtime needs its private config path');
     this.configPath = configPath;
+    this.runtimeDir = runtimeDir;
     this.fetchImpl = fetchImpl;
     this.spawnImpl = spawnImpl;
     this.port = port;
@@ -122,11 +124,12 @@ class MyaLocalEngine {
     const config = normalizeConfig(saved);
     // Optional portable offline layout: users can place the official engine
     // and their own GGUF in desktop/runtime instead of browsing for them.
-    const folder = path.join(__dirname, 'runtime');
+    const folder = this.runtimeDir;
     const engineCandidate = path.join(folder,
       process.platform === 'win32' ? 'llama-server.exe' : 'llama-server');
-    if (!config.enginePath && isLlamaServer(engineCandidate)) config.enginePath = engineCandidate;
-    if (!config.modelPath) {
+    if ((!config.enginePath || !isLlamaServer(config.enginePath)) &&
+        isLlamaServer(engineCandidate)) config.enginePath = engineCandidate;
+    if (!config.modelPath || !isGGUF(config.modelPath)) {
       const dir = path.join(folder, 'models');
       try {
         const models = fs.readdirSync(dir).filter(file => isGGUF(path.join(dir, file)));
@@ -134,6 +137,9 @@ class MyaLocalEngine {
       } catch {}
     }
     return config;
+  }
+  hasRuntime() {
+    return isLlamaServer(this.config.enginePath) && isGGUF(this.config.modelPath);
   }
   setFile(kind, filename) {
     const keys = { engine:'enginePath', model:'modelPath', projector:'projectorPath' };
