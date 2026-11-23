@@ -43,24 +43,24 @@ class MemoryRepository {
   schema(){
     this.db.exec([
       'CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY,v TEXT NOT NULL);',
-      'CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,context TEXT NOT NULL DEFAULT "",started_at TEXT NOT NULL,updated_at TEXT NOT NULL);',
-      'CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,role TEXT NOT NULL CHECK(role IN ("user","assistant")),content TEXT NOT NULL,created_at TEXT NOT NULL,sequence INTEGER NOT NULL,UNIQUE(conversation_id,sequence));',
+      `CREATE TABLE IF NOT EXISTS conversations(id TEXT PRIMARY KEY,context TEXT NOT NULL DEFAULT '',started_at TEXT NOT NULL,updated_at TEXT NOT NULL);`,
+      `CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,role TEXT NOT NULL CHECK(role IN ('user','assistant')),content TEXT NOT NULL,created_at TEXT NOT NULL,sequence INTEGER NOT NULL,UNIQUE(conversation_id,sequence));`,
       'CREATE INDEX IF NOT EXISTS messages_order ON messages(conversation_id,sequence);',
-      'CREATE TABLE IF NOT EXISTS facts(id TEXT PRIMARY KEY,kind TEXT NOT NULL,content TEXT NOT NULL,fact_key TEXT NOT NULL,subject TEXT NOT NULL,predicate TEXT NOT NULL,value TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ("pending","active","superseded","rejected")),sensitivity TEXT NOT NULL DEFAULT "standard",source TEXT NOT NULL DEFAULT "user",source_message_id TEXT,importance REAL NOT NULL,confidence REAL NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_accessed_at TEXT,conflict_with TEXT,supersedes TEXT);',
+      `CREATE TABLE IF NOT EXISTS facts(id TEXT PRIMARY KEY,kind TEXT NOT NULL,content TEXT NOT NULL,fact_key TEXT NOT NULL,subject TEXT NOT NULL,predicate TEXT NOT NULL,value TEXT NOT NULL,status TEXT NOT NULL CHECK(status IN ('pending','active','superseded','rejected')),sensitivity TEXT NOT NULL DEFAULT 'standard',source TEXT NOT NULL DEFAULT 'user',source_message_id TEXT,importance REAL NOT NULL,confidence REAL NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,last_accessed_at TEXT,conflict_with TEXT,supersedes TEXT);`,
       'CREATE INDEX IF NOT EXISTS facts_key_status ON facts(fact_key,status);',
       'CREATE TABLE IF NOT EXISTS episodes(id TEXT PRIMARY KEY,conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,kind TEXT NOT NULL,title TEXT NOT NULL,summary TEXT NOT NULL,event_at TEXT NOT NULL,importance REAL NOT NULL,source TEXT NOT NULL,created_at TEXT NOT NULL);',
       'CREATE INDEX IF NOT EXISTS episodes_date ON episodes(event_at DESC);',
-      'CREATE TABLE IF NOT EXISTS vectors(memory_type TEXT NOT NULL CHECK(memory_type IN ("semantic","episodic")),memory_id TEXT NOT NULL,model TEXT NOT NULL,dimension INTEGER NOT NULL,embedding BLOB NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(memory_type,memory_id));',
-      'CREATE TABLE IF NOT EXISTS relationship(id INTEGER PRIMARY KEY CHECK(id=1),interaction_count INTEGER NOT NULL DEFAULT 0,shared_experience_count INTEGER NOT NULL DEFAULT 0,familiarity REAL NOT NULL DEFAULT 0,communication_style TEXT NOT NULL DEFAULT "{}",updated_at TEXT NOT NULL);',
-      'INSERT OR IGNORE INTO relationship(id,updated_at) VALUES(1,"1970-01-01T00:00:00Z");',
-      'CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(content,content="facts",content_rowid="rowid",tokenize="unicode61");',
-      'CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(title,summary,content="episodes",content_rowid="rowid",tokenize="unicode61");',
+      `CREATE TABLE IF NOT EXISTS vectors(memory_type TEXT NOT NULL CHECK(memory_type IN ('semantic','episodic')),memory_id TEXT NOT NULL,model TEXT NOT NULL,dimension INTEGER NOT NULL,embedding BLOB NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(memory_type,memory_id));`,
+      `CREATE TABLE IF NOT EXISTS relationship(id INTEGER PRIMARY KEY CHECK(id=1),interaction_count INTEGER NOT NULL DEFAULT 0,shared_experience_count INTEGER NOT NULL DEFAULT 0,familiarity REAL NOT NULL DEFAULT 0,communication_style TEXT NOT NULL DEFAULT '{}',updated_at TEXT NOT NULL);`,
+      `INSERT OR IGNORE INTO relationship(id,updated_at) VALUES(1,'1970-01-01T00:00:00Z');`,
+      `CREATE VIRTUAL TABLE IF NOT EXISTS facts_fts USING fts5(content,content='facts',content_rowid='rowid',tokenize='unicode61');`,
+      `CREATE VIRTUAL TABLE IF NOT EXISTS episodes_fts USING fts5(title,summary,content='episodes',content_rowid='rowid',tokenize='unicode61');`,
       'CREATE TRIGGER IF NOT EXISTS facts_ai AFTER INSERT ON facts BEGIN INSERT INTO facts_fts(rowid,content) VALUES(new.rowid,new.content); END;',
-      'CREATE TRIGGER IF NOT EXISTS facts_ad AFTER DELETE ON facts BEGIN INSERT INTO facts_fts(facts_fts,rowid,content) VALUES("delete",old.rowid,old.content); DELETE FROM vectors WHERE memory_type="semantic" AND memory_id=old.id; END;',
-      'CREATE TRIGGER IF NOT EXISTS facts_au AFTER UPDATE OF content ON facts BEGIN INSERT INTO facts_fts(facts_fts,rowid,content) VALUES("delete",old.rowid,old.content); INSERT INTO facts_fts(rowid,content) VALUES(new.rowid,new.content); DELETE FROM vectors WHERE memory_type="semantic" AND memory_id=new.id; END;',
+      `CREATE TRIGGER IF NOT EXISTS facts_ad AFTER DELETE ON facts BEGIN INSERT INTO facts_fts(facts_fts,rowid,content) VALUES('delete',old.rowid,old.content); DELETE FROM vectors WHERE memory_type='semantic' AND memory_id=old.id; END;`,
+      `CREATE TRIGGER IF NOT EXISTS facts_au AFTER UPDATE OF content ON facts BEGIN INSERT INTO facts_fts(facts_fts,rowid,content) VALUES('delete',old.rowid,old.content); INSERT INTO facts_fts(rowid,content) VALUES(new.rowid,new.content); DELETE FROM vectors WHERE memory_type='semantic' AND memory_id=new.id; END;`,
       'CREATE TRIGGER IF NOT EXISTS episodes_ai AFTER INSERT ON episodes BEGIN INSERT INTO episodes_fts(rowid,title,summary) VALUES(new.rowid,new.title,new.summary); END;',
-      'CREATE TRIGGER IF NOT EXISTS episodes_ad AFTER DELETE ON episodes BEGIN INSERT INTO episodes_fts(episodes_fts,rowid,title,summary) VALUES("delete",old.rowid,old.title,old.summary); DELETE FROM vectors WHERE memory_type="episodic" AND memory_id=old.id; END;',
-      'CREATE TRIGGER IF NOT EXISTS episodes_au AFTER UPDATE OF title,summary ON episodes BEGIN INSERT INTO episodes_fts(episodes_fts,rowid,title,summary) VALUES("delete",old.rowid,old.title,old.summary); INSERT INTO episodes_fts(rowid,title,summary) VALUES(new.rowid,new.title,new.summary); DELETE FROM vectors WHERE memory_type="episodic" AND memory_id=new.id; END;'
+      `CREATE TRIGGER IF NOT EXISTS episodes_ad AFTER DELETE ON episodes BEGIN INSERT INTO episodes_fts(episodes_fts,rowid,title,summary) VALUES('delete',old.rowid,old.title,old.summary); DELETE FROM vectors WHERE memory_type='episodic' AND memory_id=old.id; END;`,
+      `CREATE TRIGGER IF NOT EXISTS episodes_au AFTER UPDATE OF title,summary ON episodes BEGIN INSERT INTO episodes_fts(episodes_fts,rowid,title,summary) VALUES('delete',old.rowid,old.title,old.summary); INSERT INTO episodes_fts(rowid,title,summary) VALUES(new.rowid,new.title,new.summary); DELETE FROM vectors WHERE memory_type='episodic' AND memory_id=new.id; END;`
     ].join('\n'));
   }
   tx(fn){this.db.exec('BEGIN IMMEDIATE');try{const x=fn();this.db.exec('COMMIT');return x;}catch(e){this.db.exec('ROLLBACK');throw e;}}
@@ -88,9 +88,9 @@ class MemoryRepository {
   saveFact(d={},options={}){
     const content=clean(d.content,500);if(!content)return {ok:false,error:'Memory text is required'};
     const kind=types.has(d.kind)?d.kind:'note',key=factKey({...d,kind,content});
-    const previous=this.db.prepare('SELECT * FROM facts WHERE fact_key=? AND status="active" ORDER BY updated_at DESC LIMIT 1').get(key);
+    const previous=this.db.prepare(`SELECT * FROM facts WHERE fact_key=? AND status='active' ORDER BY updated_at DESC LIMIT 1`).get(key);
     if(previous&&norm(previous.content)===norm(content))return {ok:true,id:previous.id,duplicate:true,status:'active'};
-    const duplicate=this.db.prepare('SELECT id FROM facts WHERE fact_key=? AND content=? AND status="pending"').get(key,content);
+    const duplicate=this.db.prepare(`SELECT id FROM facts WHERE fact_key=? AND content=? AND status='pending'`).get(key,content);
     if(duplicate)return {ok:true,id:duplicate.id,duplicate:true,status:'pending'};
     const status=options.autoApprove&&!previous&&d.sensitivity!=='sensitive'?'active':'pending',id=uid(),t=now();
     this.db.prepare('INSERT INTO facts(id,kind,content,fact_key,subject,predicate,value,status,sensitivity,source,source_message_id,importance,confidence,created_at,updated_at,conflict_with) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
@@ -101,16 +101,16 @@ class MemoryRepository {
   }
   approve(id){
     return this.tx(()=>{
-      const fact=this.db.prepare('SELECT * FROM facts WHERE id=? AND status="pending"').get(id);
+      const fact=this.db.prepare(`SELECT * FROM facts WHERE id=? AND status='pending'`).get(id);
       if(!fact)return {ok:false,error:'Pending memory not found'};
-      const prior=this.db.prepare('SELECT id FROM facts WHERE fact_key=? AND status="active" AND id<>?').all(fact.fact_key,id);
+      const prior=this.db.prepare(`SELECT id FROM facts WHERE fact_key=? AND status='active' AND id<>?`).all(fact.fact_key,id);
       const t=now();
-      for(const old of prior)this.db.prepare('UPDATE facts SET status="superseded",updated_at=? WHERE id=?').run(t,old.id);
-      this.db.prepare('UPDATE facts SET status="active",supersedes=?,updated_at=? WHERE id=?').run(prior[0]?.id||null,t,id);
+      for(const old of prior)this.db.prepare(`UPDATE facts SET status='superseded',updated_at=? WHERE id=?`).run(t,old.id);
+      this.db.prepare(`UPDATE facts SET status='active',supersedes=?,updated_at=? WHERE id=?`).run(prior[0]?.id||null,t,id);
       return {ok:true,id,superseded:prior.map(x=>x.id)};
     });
   }
-  reject(id){return this.db.prepare('UPDATE facts SET status="rejected",updated_at=? WHERE id=? AND status="pending"').run(now(),id).changes>0;}
+  reject(id){return this.db.prepare(`UPDATE facts SET status='rejected',updated_at=? WHERE id=? AND status='pending'`).run(now(),id).changes>0;}
   facts(status='active',limit=200){
     if(!['active','pending','superseded','rejected'].includes(status))throw Error('Invalid memory state');
     return this.db.prepare('SELECT * FROM facts WHERE status=? ORDER BY updated_at DESC LIMIT ?').all(status,Math.min(500,Math.max(1,limit)));
@@ -135,7 +135,7 @@ class MemoryRepository {
   deleteEpisode(id){return this.db.prepare('DELETE FROM episodes WHERE id=?').run(id).changes>0;}
   searchFacts(text,limit=16){
     const query=fts(text);if(!query)return [];
-    return this.db.prepare('SELECT f.*,bm25(facts_fts) rank FROM facts_fts JOIN facts f ON f.rowid=facts_fts.rowid WHERE facts_fts MATCH ? AND f.status="active" ORDER BY rank LIMIT ?').all(query,Math.min(80,limit));
+    return this.db.prepare(`SELECT f.*,bm25(facts_fts) rank FROM facts_fts JOIN facts f ON f.rowid=facts_fts.rowid WHERE facts_fts MATCH ? AND f.status='active' ORDER BY rank LIMIT ?`).all(query,Math.min(80,limit));
   }
   searchEpisodes(text,limit=12){
     const query=fts(text);if(!query)return [];
@@ -153,14 +153,14 @@ class MemoryRepository {
   vectorCandidates(type,model,limit=1800){
     if(!['semantic','episodic'].includes(type))return [];
     const table=type==='semantic'?'facts':'episodes';
-    const active=type==='semantic'?'AND m.status="active"':'';
+    const active=type==='semantic'?`AND m.status='active'`:'';
     return this.db.prepare('SELECT v.memory_id,v.embedding,m.* FROM vectors v JOIN '+table+' m ON m.id=v.memory_id WHERE v.memory_type=? AND v.model=? '+active+' ORDER BY v.updated_at DESC LIMIT ?')
       .all(type,model,Math.min(5000,limit)).map(x=>({...x,embedding:undefined,vector:fromBlob(x.embedding)}));
   }
   unindexed(type,limit=12){
     if(!['semantic','episodic'].includes(type))return [];
     const table=type==='semantic'?'facts':'episodes';
-    const active=type==='semantic'?'AND m.status="active"':'';
+    const active=type==='semantic'?`AND m.status='active'`:'';
     return this.db.prepare('SELECT m.* FROM '+table+' m LEFT JOIN vectors v ON v.memory_type=? AND v.memory_id=m.id WHERE v.memory_id IS NULL '+active+' ORDER BY m.created_at DESC LIMIT ?').all(type,Math.min(80,limit));
   }
   relationship(){
@@ -180,7 +180,7 @@ class MemoryRepository {
   countMessages(id){return this.db.prepare('SELECT COUNT(*) n FROM messages WHERE conversation_id=?').get(id).n;}
   touch(id){this.db.prepare('UPDATE facts SET last_accessed_at=? WHERE id=?').run(now(),id);}
   reset(){
-    this.tx(()=>this.db.exec('DELETE FROM vectors; DELETE FROM facts; DELETE FROM episodes; DELETE FROM messages; DELETE FROM conversations; DELETE FROM meta; DELETE FROM relationship; INSERT INTO relationship(id,updated_at) VALUES(1,"1970-01-01T00:00:00Z");'));
+    this.tx(()=>this.db.exec(`DELETE FROM vectors; DELETE FROM facts; DELETE FROM episodes; DELETE FROM messages; DELETE FROM conversations; DELETE FROM meta; DELETE FROM relationship; INSERT INTO relationship(id,updated_at) VALUES(1,'1970-01-01T00:00:00Z');`));
     try{this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');}catch{}
   }
   close(){this.db.close();}
