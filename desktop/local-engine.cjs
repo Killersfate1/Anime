@@ -194,12 +194,13 @@ class MyaLocalEngine {
   async _health(timeoutMs = 1500) {
     try {
       const response = await this.fetchImpl(this.baseUrl + '/health', {
+        headers: this.apiKey ? {Authorization:'Bearer '+this.apiKey} : {},
         signal: AbortSignal.timeout(timeoutMs), redirect: 'error'
       });
       if (!response.ok) return false;
       const data = await response.json();
       return data.status === 'ok' || data.status === 'ready' ||
-        data.status === 'healthy';
+        data.status === 'healthy' || data.status === 'loading model' && false;
     } catch { return false; }
   }
   async start() {
@@ -260,7 +261,8 @@ class MyaLocalEngine {
         }
         await new Promise(resolve => setTimeout(resolve, 700));
       }
-      throw new Error('Local model did not become ready within two minutes. Try a smaller GGUF or fewer GPU layers.');
+      throw new Error('Mya could not finish loading the local model. Engine output: ' +
+        this.stderrTail.slice(-650));
     })().catch(error => {
       if (this.canceled) {
         this.state = 'stopped';
@@ -295,6 +297,7 @@ class MyaLocalEngine {
     const request = {
       model: 'mya',
       messages: toChatMessages(messages, !!this.config.projectorPath),
+      chat_template_kwargs: {enable_thinking:false},
       temperature: Math.min(1.5, Math.max(0, Number(temperature) || 0.7)),
       max_tokens: Math.min(1400, Math.max(40, Number(numPredict) || 350)),
       stream: !!onDelta
