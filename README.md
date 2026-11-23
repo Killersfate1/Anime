@@ -1,5 +1,7 @@
 # Relay / Mya
 
+**New:** Mya also includes optional, on-device Kokoro neural speech (Heart/Bella/Nicole voice presets), installed with explicit approval from Settings, and a packaging path for a one-launch Windows application. See [desktop/README.md](desktop/README.md).
+
 **Mya Local AI no longer requires Ollama.** The `desktop/` app manages a user-selected llama.cpp GGUF inference engine on `127.0.0.1:18931` and streams local conversation responses. Configure it in Settings; the model and runtime binaries are not committed to GitHub. See [desktop/README.md](desktop/README.md).
 
 
