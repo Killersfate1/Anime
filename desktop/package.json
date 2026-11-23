@@ -10,7 +10,8 @@
     "test": "node --test initiative.test.cjs pcm-wav.test.mjs chat-context.test.cjs screen-change.test.cjs memory-store.test.cjs speech-sync.test.mjs avatar-validation.test.cjs"
   },
   "dependencies": {
-    "three": "^0.181.0"
+    "three": "^0.181.0",
+    "@pixiv/three-vrm": "^3.5.5"
   },
   "devDependencies": {
     "electron": "^38.0.0"
