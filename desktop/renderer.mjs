@@ -262,6 +262,7 @@ function message(text, kind = 'mya') {
   item.textContent = text;
   ui('conversation').appendChild(item);
   ui('conversation').scrollTop = ui('conversation').scrollHeight;
+  return item;
 }
 function moveToRest() {
   if (!character) return;
@@ -476,22 +477,53 @@ function showResearch(result) {
   }
   holder.classList.remove('hidden');
 }
+let activeChatRequest = null;
+let chatSerial = 0;
+api.onChatDelta(payload => {
+  if (!activeChatRequest || payload?.requestId !== activeChatRequest.id ||
+      typeof payload.delta !== 'string') return;
+  const item = activeChatRequest.bubble;
+  item.textContent = (item.textContent === '…' ? '' : item.textContent) + payload.delta;
+  ui('conversation').scrollTop = ui('conversation').scrollHeight;
+});
 async function sendMessage() {
+  if (activeChatRequest) return;
   const input = ui('chat-input');
   const text = input.value.trim();
   if (!text) return;
+  const requestId = 'mya-' + ++chatSerial;
   input.value = '';
   message(text, 'user');
   showResearch(null);
-  ui('state').textContent = currentSettings.webEnabled ? 'Thinking · search allowed' : 'Thinking';
+  const bubble = message('…');
+  activeChatRequest = { id: requestId, bubble };
+  ui('state').textContent = currentSettings.webEnabled ? 'Thinking · research allowed' : 'Thinking';
   playMyaGesture('Think');
   ui('send').disabled = true;
+  ui('stop-answer').disabled = false;
   try {
-    const result = await api.askLocalAI(text);
-    if (result.error) { toast(result.error); message(result.error); }
-    else { message(result.text); showResearch(result.research); say(result.text); }
-  } catch (error) { toast(error.message); }
-  finally { ui('send').disabled = false; if (!speaking) ui('state').textContent = 'Ready'; }
+    const result = await api.askLocalAI(text, requestId);
+    if (result.canceled) {
+      bubble.textContent = bubble.textContent === '…' ? 'Response stopped.' :
+        bubble.textContent + ' (stopped)';
+    } else if (result.error) {
+      toast(result.error);
+      bubble.textContent = result.error;
+      if (result.error.includes('Start Mya AI')) showTab('settings');
+    } else {
+      bubble.textContent = result.text;
+      showResearch(result.research);
+      say(result.text);
+    }
+  } catch(error) {
+    bubble.textContent = 'Mya AI error: ' + error.message;
+    toast(error.message);
+  } finally {
+    if (activeChatRequest?.id === requestId) activeChatRequest = null;
+    ui('send').disabled = false;
+    ui('stop-answer').disabled = true;
+    if (!speaking) ui('state').textContent = 'Ready';
+  }
 }
 function setWatching(value) {
   observing = value;
@@ -568,8 +600,6 @@ async function stopWatching() {
 }
 async function loadSettings() {
   currentSettings = await api.settings();
-  ui('chat-model').value = currentSettings.chatModel;
-  ui('vision-model').value = currentSettings.visionModel;
   ui('talkativeness').value = currentSettings.talkativeness;
   ui('voice-enabled').checked = currentSettings.voiceEnabled;
   ui('economy-mode').checked = currentSettings.economyMode;
@@ -594,8 +624,6 @@ async function loadSettings() {
 async function saveSettings() {
   try {
     currentSettings = await api.updateSettings({
-      chatModel: ui('chat-model').value,
-      visionModel: ui('vision-model').value,
       talkativeness: Number(ui('talkativeness').value),
       voiceEnabled: ui('voice-enabled').checked,
       economyMode: ui('economy-mode').checked,
@@ -698,6 +726,69 @@ ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
+function renderEngineStatus(info) {
+  if (!info) return;
+  ui('engine-file').textContent = info.engineName || 'None selected';
+  ui('gguf-file').textContent = info.modelName || 'None selected';
+  ui('projector-file').textContent = info.projectorName
+    ? 'Vision projector: ' + info.projectorName
+    : 'No multimodal projector selected (text only).';
+  ui('engine-gpu-layers').value = info.gpuLayers ?? 0;
+  ui('engine-context').value = String(info.contextSize || 4096);
+  const label = info.ready ? 'RUNNING' : (info.state || 'stopped').toUpperCase();
+  ui('engine-status').textContent = 'Mya AI: ' + label +
+    (info.ready ? ' · ' + info.modelName : '') +
+    (info.lastError ? '\n' + info.lastError : '') +
+    (info.error ? '\n' + info.error : '');
+  ui('local-ai-status').textContent = info.ready
+    ? 'Mya AI: running locally'
+    : 'Mya AI: ' + (info.state || 'not started');
+  ui('engine-start').disabled = info.ready || info.state === 'starting';
+  ui('engine-stop').disabled = !info.ready && info.state !== 'starting';
+  const locked = info.ready || info.state === 'starting';
+  for (const field of ['choose-engine','choose-gguf','choose-projector','clear-projector',
+    'engine-gpu-layers','engine-context']) ui(field).disabled = locked;
+}
+async function refreshEngineStatus() {
+  try { renderEngineStatus(await api.engineStatus()); }
+  catch (error) { ui('engine-status').textContent = 'Local AI setup error: ' + error.message; }
+}
+async function chooseLocalFile(kind) {
+  try {
+    const info = await api.chooseEngineFile(kind);
+    renderEngineStatus(info);
+    if (info.error) toast(info.error);
+  } catch (error) { toast('File selection failed: ' + error.message); }
+}
+ui('choose-engine').addEventListener('click', () => chooseLocalFile('engine'));
+ui('choose-gguf').addEventListener('click', () => chooseLocalFile('model'));
+ui('choose-projector').addEventListener('click', () => chooseLocalFile('projector'));
+ui('clear-projector').addEventListener('click', async () => {
+  renderEngineStatus(await api.clearProjector());
+});
+ui('engine-start').addEventListener('click', async () => {
+  ui('engine-start').disabled = true;
+  ui('engine-status').textContent = 'Starting Mya local AI · loading model into memory…';
+  try {
+    const options = {
+      gpuLayers: Number(ui('engine-gpu-layers').value),
+      contextSize: Number(ui('engine-context').value)
+    };
+    const configured = await api.configureEngine(options);
+    if (configured.error) { renderEngineStatus(configured); return; }
+    const state = await api.startEngine();
+    renderEngineStatus(state);
+    toast(state.ready ? 'Mya AI is ready to talk! ♡' : (state.error || 'Model not ready'));
+  } catch (error) {
+    ui('engine-status').textContent = 'Could not start AI: ' + error.message;
+  } finally { await refreshEngineStatus(); }
+});
+ui('engine-stop').addEventListener('click', async () => {
+  if (activeChatRequest) await api.cancelLocalChat();
+  const info = await api.stopEngine();
+  renderEngineStatus(info);
+});
+ui('stop-answer').addEventListener('click', () => api.cancelLocalChat());
 ui('clear-web-key').addEventListener('click', async () => {
   await api.updateSettings({clearWebKey: true});
   ui('web-api-key').value = '';
@@ -749,7 +840,7 @@ ui('check-mya').addEventListener('click', async () => {
     ui('mya-diagnostics').textContent =
       'Selected avatar: ' + model +
       '\nKawaii FBX: ' + kawaiiStatus +
-      '\nOllama: ' + (status.ollama.reachable ? 'reachable' : 'offline') +
+      '\nMya local AI: ' + (status.localAI.ready ? 'running (' + status.localAI.modelName + ')' : status.localAI.state) +
       '\nwhisper.cpp: ' + (status.whisper.reachable ? 'reachable' : 'offline') +
       '\nAnimation quality: NOT verified · Accurate lip sync: NOT verified';
   } catch (error) { ui('mya-diagnostics').textContent = 'Diagnostics failed: ' + error.message; }
@@ -823,6 +914,7 @@ window.addEventListener('beforeunload', () => { speechSession.cancel(); mic.canc
 (async () => {
   try {
     await loadSettings();
+    await refreshEngineStatus();
     await loadModel();
     await updateMemories();
   } catch (error) { toast('Initialization error: ' + error.message); }
