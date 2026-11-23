@@ -38,7 +38,7 @@ function logRuntimeFault(category, details) {
 
 const DEFAULTS = Object.freeze({
   // The local GGUF selected in Settings is the only inference model.
-  talkativeness: 0.45,
+  talkativeness: 0.90,
   voiceEnabled: true,
   voiceMode: 'neural',
   voiceName: 'af_heart',
@@ -46,7 +46,9 @@ const DEFAULTS = Object.freeze({
   economyMode: false,
   quietMode: false,
   personalityMode: 'girlfriend',
-  affection: 0.78,
+  affection: 0.95,
+  flirtation: 0.95,
+  matureBanter: true,
   webEnabled: false,
   webProvider: 'wikipedia',
   autoResearch: true,
@@ -142,6 +144,8 @@ function currentSettings() {
     quietMode: raw.quietMode === true,
     personalityMode: ['girlfriend','best_friend','gaming_partner','productivity','friendly'].includes(raw.personalityMode) ? raw.personalityMode : DEFAULTS.personalityMode,
     affection: Number.isFinite(raw.affection) ? Math.min(1,Math.max(0,raw.affection)) : DEFAULTS.affection,
+    flirtation: Number.isFinite(raw.flirtation) ? Math.min(1,Math.max(0,raw.flirtation)) : DEFAULTS.flirtation,
+    matureBanter: raw.matureBanter === false ? false : DEFAULTS.matureBanter,
     webEnabled: raw.webEnabled === true,
     webProvider: raw.webProvider === 'brave' ? 'brave' : 'wikipedia',
     autoResearch: raw.autoResearch !== false,
@@ -745,6 +749,8 @@ function registerIpc() {
         mode: settings.personalityMode,
         affection: settings.affection,
         talkativeness: settings.talkativeness,
+        flirtation: settings.flirtation,
+        matureBanter: settings.matureBanter,
         memory: context,
         observation: visibleContext,
         research: sources
@@ -758,7 +764,7 @@ function registerIpc() {
         ...conversation.messages(question, chatBudget)];
       const response = await localModel(null, messages, controller.signal,
         {
-          numPredict: 580, temperature: 0.70,
+          numPredict: Math.round(420 + settings.talkativeness * 580), temperature: 0.78,
           onDelta: delta => {
             if (!controller.signal.aborted && !event.sender.isDestroyed())
               event.sender.send('mya:chat-delta', { requestId, delta });
