@@ -66,6 +66,31 @@ let vrmBaseYaw = 0;
 let kawaii = null;
 let procedural = null;
 let preferProcedural = false;
+let movementCheck = null;
+function inspectAvatarMaterials(gltf) {
+  const materials = new Set();
+  let meshes = 0, textured = 0, whiteMaterials = 0;
+  gltf.scene.traverse(obj => {
+    if (!obj.isMesh) return;
+    meshes++;
+    const list = Array.isArray(obj.material) ? obj.material : [obj.material];
+    for (const mat of list) {
+      if (!mat || materials.has(mat)) continue;
+      materials.add(mat);
+      if (mat.map || mat.shadeMultiplyTexture || mat.emissiveMap) textured++;
+      if (mat.color?.r > 0.95 && mat.color.g > 0.95 && mat.color.b > 0.95) whiteMaterials++;
+    }
+  });
+  const images = gltf.parser?.json?.images?.length ?? 'unknown';
+  const maps = gltf.parser?.json?.textures?.length ?? 'unknown';
+  ui('material-diagnostics').textContent =
+    'Meshes: ' + meshes + ' · Materials: ' + materials.size +
+    ' · Material texture maps: ' + textured +
+    ' · Embedded images: ' + images + ' · glTF textures: ' + maps +
+    (textured === 0 && images !== 0 && images !== 'unknown'
+      ? ' · WARNING: images exist but no active texture maps were detected'
+      : '');
+}
 function reportMotionStatus() {
   const fallback = procedural?.status;
   ui('animation-diagnostics').textContent =
@@ -211,6 +236,7 @@ function applyAvatar(gltf) {
   scene.add(character);
   face = new MyaFace(character, faceSettings(), activeVRM);
   faceDiagnostics();
+  inspectAvatarMaterials(gltf);
   // Preserve the uploaded material assignments and mesh hierarchy.
   character.traverse((node) => {
     if (node.isMesh) { node.frustumCulled = false; }
@@ -234,6 +260,7 @@ function applyAvatar(gltf) {
     ? 'Mya · VRM ' + (activeVRM.meta?.metaVersion || '') + ' · Kawaii loading…'
     : head ? 'Mya · GLB · Kawaii loading…' : 'Mya · GLB loaded (rig check required)';
   procedural = new MyaProceduralMotion(character, activeVRM);
+  movementCheck = null;
   kawaii = new MyaKawaiiAnimation(character, activeVRM);
   reportMotionStatus();
   nextIdleMoment = performance.now() + 12000;
@@ -243,6 +270,15 @@ function applyAvatar(gltf) {
   }).then(ok => {
     if (kawaii !== loadingController) return;
     reportMotionStatus();
+    if (ok && procedural?.status.animated) {
+      const joints = Object.values(procedural.bones || {});
+      movementCheck = {
+        began: performance.now(),
+        joints,
+        initial: joints.map(bone => bone.quaternion.clone()),
+        maxAngle: 0
+      };
+    }
     if (!ok) {
       ui('avatar-status').textContent = 'Fallback movement active; Kawaii retarget needs calibration';
       toast('Mya is using basic fallback movement. Kawaii FBX retarget still needs fixing.');
@@ -289,8 +325,27 @@ function frame(t) {
   const delta = previousAnimationTime ? Math.min((t - previousAnimationTime) / 1000, 0.05) : 0.016;
   previousAnimationTime = t;
   const useKawaii = !preferProcedural && kawaii?.ready;
-  if (useKawaii) kawaii.update(delta);
-  else procedural?.update(delta);
+  if (useKawaii) {
+    kawaii.update(delta);
+    if (movementCheck) {
+      let moved = 0;
+      movementCheck.joints.forEach((bone, index) => {
+        moved = Math.max(moved, bone.quaternion.angleTo(movementCheck.initial[index]));
+      });
+      movementCheck.maxAngle = Math.max(movementCheck.maxAngle, moved);
+      if (t - movementCheck.began > 5000) {
+        if (movementCheck.maxAngle < 0.005) {
+          preferProcedural = true;
+          ui('force-procedural').checked = true;
+          kawaii.mixer.stopAllAction();
+          procedural?.play('Idle');
+          ui('avatar-status').textContent = 'Mya moving with fallback · Kawaii retarget did not animate bones';
+          reportMotionStatus();
+        }
+        movementCheck = null;
+      }
+    }
+  } else procedural?.update(delta);
   if (!speaking && t > nextIdleMoment) {
     const choices = ['Idle', 'Idle', 'LookAround', 'Waiting', 'Stretch'];
     playMyaGesture(choices[Math.floor(Math.random() * choices.length)]);
@@ -588,6 +643,7 @@ ui('clear-web-key').addEventListener('click', async () => {
 });
 ui('force-procedural').addEventListener('change', () => {
   preferProcedural = ui('force-procedural').checked;
+  movementCheck = null;
   if (preferProcedural) {
     kawaii?.mixer?.stopAllAction();
     procedural?.play('Idle');
