@@ -85,3 +85,14 @@ Confirm the Three-VRM loader retains `autoUpdateHumanBones: false` because Mya a
 - Check CPU mode first for memory stability; tune GPU layers only after actual Windows testing.
 
 **These integration checks have not been performed against the user's PC.** CI checks isolated Node functionality, not real GGUF load or speech/graphics quality.
+
+## Built-in neural voice acceptance gate
+
+- Pull `main`, run `npm install`, and launch Mya. In Settings click **Install neural voice** and confirm downloads only begin after this click.
+- Choose **Heart** and use **Hear Mya's voice**. Verify intelligible, natural audio without Windows TTS. Repeat with **Bella** and **Nicole** to compare personalities.
+- Disconnect the internet after installation, relaunch Mya, and verify the cached voice still loads and speaks. Confirm no text is sent to an external voice provider.
+- Send multi-sentence messages and verify sequential speech chunks, responsive cancellation, and no WAV files written to disk.
+- Verify avatar lip movements respond to the audio waveform and stop immediately when audio stops. No phoneme-accurate lip sync is claimed.
+- For the single-launch installer, provide a legally redistributable GGUF and official llama.cpp Windows binaries in `desktop/runtime/`, run `npm run build:windows`, then launch and check that the brain starts without any terminal service.
+
+**This workflow remains pending physical Windows audio + GPU verification.** Source and CI tests cannot establish perceived voice quality.
