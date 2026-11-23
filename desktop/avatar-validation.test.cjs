@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { inspectGlb } = require('./avatar-validation.cjs');
+const { inspectGlb, inspectAvatar } = require('./avatar-validation.cjs');
 
 function makeGlb(overrides = {}) {
   const document = {
@@ -52,4 +52,19 @@ test('rejects models without skeletons and external assets', () => {
 });
 test('rejects GLB binary buffers that are not embedded', () => {
   assert.equal(inspectGlb(makeGlb({ buffers: [{ byteLength: 5000 }] })).valid, false);
+});
+
+test('accepts VRM 0.x and VRM 1.0 with humanoid rigs', () => {
+  const vrm0 = inspectAvatar(makeGlb({ extensions: { VRM: { specVersion: '0.0' } } }), '.vrm');
+  const vrm1 = inspectAvatar(makeGlb({ extensions: { VRMC_vrm: { specVersion: '1.0' } } }), '.VRM');
+  assert.equal(vrm0.valid, true);
+  assert.equal(vrm0.extension, 'vrm');
+  assert.equal(vrm0.vrmVersion, '0.x');
+  assert.equal(vrm1.valid, true);
+  assert.equal(vrm1.vrmVersion, '1.0');
+});
+test('keeps GLB compatibility and rejects mislabeled VRM files', () => {
+  assert.equal(inspectAvatar(makeGlb(), '.glb').valid, true);
+  assert.match(inspectAvatar(makeGlb(), '.vrm').reason, /VRM 0.x or 1.0/);
+  assert.equal(inspectAvatar(makeGlb(), '.obj').valid, false);
 });
