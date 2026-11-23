@@ -80,3 +80,13 @@ input[type="range"] { width: 100%; accent-color: #ef80c7; }
 .face-sliders label { font-size:11px; min-width:0; }
 .face-sliders label.check { grid-column:1 / -1; }
 #face-diagnostics { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.ai-controls { padding:9px; display:flex; flex-direction:column; gap:8px; background:#1b142a; border:1px solid #69447d; border-radius:10px; }
+.ai-controls strong { color:#f1d8f2; font-size:12px; }
+.ai-controls label { font-size:11px; }
+.ai-controls select { width:100%; }
+#web-key-status { align-self:center; }
+.research-output { border-top:1px solid #59416e; display:flex; flex-direction:column; gap:5px; background:#1a1426; padding:8px; max-height:125px; overflow:auto; font-size:11px; }
+.research-output strong { color:#dcace8; font-size:11px; overflow-wrap:anywhere; }
+.research-source { background:#39284e; border:0; color:#ead0f8; padding:5px 8px; font-size:11px; text-align:left; overflow-wrap:anywhere; }
+.research-source:hover { background:#55346d; }
