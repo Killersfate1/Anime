@@ -242,7 +242,7 @@ function registerIpc() {
     if (!fs.existsSync(file)) return null;
     const bytes = fs.readFileSync(file);
     if (bytes.length > 30 * 1024 * 1024) throw new Error('Animation clip is too large');
-    return { name, loop: !!entry.loop, base64: bytes.toString('base64') };
+    return { name, loop: !!entry.loop, bytes: Uint8Array.from(bytes) };
   });
   ipcMain.handle('mya:mic-arm', (event) => {
     if (!window || event.sender.id !== window.webContents.id || currentSettings().quietMode) return false;
