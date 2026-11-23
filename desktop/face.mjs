@@ -55,6 +55,9 @@ export class MyaFace {
     this.target = 0;
     this.emotion = 'neutral';
     this.jawStart = this.rig.jaw?.quaternion.clone() || null;
+    this.blinkClock = 0;
+    this.blinkStart = -100;
+    this.nextBlink = 2 + Math.random() * 3;
     this.setFallback(options);
     this._buildFallback();
   }
@@ -142,6 +145,16 @@ export class MyaFace {
       blinkRight: 0
     };
     if (this.expressionManager) {
+      this.blinkClock += dt;
+      if (this.blinkClock >= this.nextBlink) {
+        this.blinkStart = this.blinkClock;
+        this.nextBlink += 2.5 + Math.random() * 3;
+      }
+      const blinkAge = this.blinkClock - this.blinkStart;
+      const blinkValue = blinkAge >= 0 && blinkAge < 0.22
+        ? Math.sin(Math.PI * blinkAge / 0.22) : 0;
+      if (this.expressionManager.getExpression?.('blink'))
+        this.expressionManager.setValue('blink', blinkValue);
       // VRM manages its own expression morph targets. Do not overwrite them
       // directly or its update() method would fight the face controller.
       const expressionTargets = {
@@ -173,7 +186,7 @@ export class MyaFace {
   }
   dispose() {
     if (this.expressionManager) {
-      for (const name of ['aa', 'ee', 'oh', 'happy', 'sad', 'surprised']) {
+      for (const name of ['aa', 'ee', 'oh', 'happy', 'sad', 'surprised', 'blink']) {
         if (this.expressionManager.getExpression?.(name))
           this.expressionManager.setValue(name, 0);
       }
