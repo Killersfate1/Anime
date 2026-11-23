@@ -132,8 +132,18 @@ function getSearchKey() {
 }
 function currentSettings() {
   const raw = safeJsonRead('settings.json', {});
+  // A pre-flirtation installation stored the old defaults (0.45/0.78).
+  // Migrate only those exact legacy values when new settings are absent;
+  // preserve intentional custom values and all explicitly saved profiles.
+  const legacyProfile = !Object.hasOwn(raw, 'flirtation') &&
+    !Object.hasOwn(raw, 'matureBanter') &&
+    (!raw.personalityMode || raw.personalityMode === 'girlfriend');
+  const originalTalk = legacyProfile && raw.talkativeness === 0.45
+    ? DEFAULTS.talkativeness : raw.talkativeness;
+  const originalAffection = legacyProfile && raw.affection === 0.78
+    ? DEFAULTS.affection : raw.affection;
   return {
-    talkativeness: Number.isFinite(raw.talkativeness) ? Math.min(1, Math.max(0, raw.talkativeness)) : DEFAULTS.talkativeness,
+    talkativeness: Number.isFinite(originalTalk) ? Math.min(1, Math.max(0, originalTalk)) : DEFAULTS.talkativeness,
     voiceEnabled: raw.voiceEnabled === false ? false : true,
     voiceMode: raw.voiceMode === 'system' ? 'system' : 'neural',
     voiceName: ['af_heart','af_bella','af_nicole','af_sarah','af_kore','af_sky','bf_emma','bf_lily'].includes(raw.voiceName)
@@ -143,7 +153,7 @@ function currentSettings() {
     economyMode: raw.economyMode === true,
     quietMode: raw.quietMode === true,
     personalityMode: ['girlfriend','best_friend','gaming_partner','productivity','friendly'].includes(raw.personalityMode) ? raw.personalityMode : DEFAULTS.personalityMode,
-    affection: Number.isFinite(raw.affection) ? Math.min(1,Math.max(0,raw.affection)) : DEFAULTS.affection,
+    affection: Number.isFinite(originalAffection) ? Math.min(1,Math.max(0,originalAffection)) : DEFAULTS.affection,
     flirtation: Number.isFinite(raw.flirtation) ? Math.min(1,Math.max(0,raw.flirtation)) : DEFAULTS.flirtation,
     matureBanter: raw.matureBanter === false ? false : DEFAULTS.matureBanter,
     webEnabled: raw.webEnabled === true,
