@@ -628,7 +628,9 @@ async function loadSettings() {
   ui('economy-mode').checked = currentSettings.economyMode;
   ui('quiet-mode').checked = currentSettings.quietMode;
   ui('personality-mode').value = currentSettings.personalityMode || 'girlfriend';
-  ui('affection').value = currentSettings.affection ?? 0.78;
+  ui('affection').value = currentSettings.affection ?? 0.95;
+  ui('flirtation').value = currentSettings.flirtation ?? 0.95;
+  ui('mature-banter').checked = currentSettings.matureBanter !== false;
   ui('web-enabled').checked = !!currentSettings.webEnabled;
   ui('auto-research').checked = currentSettings.autoResearch !== false;
   ui('web-provider').value = currentSettings.webProvider || 'wikipedia';
@@ -656,6 +658,8 @@ async function saveSettings() {
       quietMode: ui('quiet-mode').checked,
       personalityMode: ui('personality-mode').value,
       affection: Number(ui('affection').value),
+      flirtation: Number(ui('flirtation').value),
+      matureBanter: ui('mature-banter').checked,
       webEnabled: ui('web-enabled').checked,
       webProvider: ui('web-provider').value,
       autoResearch: ui('auto-research').checked,
