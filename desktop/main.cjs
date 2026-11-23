@@ -11,6 +11,7 @@ const { makeMemory, validMemories, relevantMemories } = require('./memory-store.
 const { inspectAvatar } = require('./avatar-validation.cjs');
 const { buildMyaPrompt } = require('./mya-personality.cjs');
 const { MyaLocalEngine } = require('./local-engine.cjs');
+const { MyaNeuralVoice } = require('./neural-voice.cjs');
 const { MyaWebResearch, explicitResearchQuery, shouldConsiderAutoresearch, cleanSearchQuery } = require('./web-research.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
@@ -39,6 +40,9 @@ const DEFAULTS = Object.freeze({
   // The local GGUF selected in Settings is the only inference model.
   talkativeness: 0.45,
   voiceEnabled: true,
+  voiceMode: 'neural',
+  voiceName: 'af_heart',
+  voiceSpeed: 1,
   economyMode: false,
   quietMode: false,
   personalityMode: 'girlfriend',
@@ -81,6 +85,7 @@ let activeTranscription = null;
 let chatBusy = false;
 const conversation = new ChatContext(20);
 let localEngine = null;
+let neuralVoice = null;
 let activeChat = null;
 const webResearch = new MyaWebResearch();
 let lastApprovedSourceURLs = new Set();
@@ -128,6 +133,11 @@ function currentSettings() {
   return {
     talkativeness: Number.isFinite(raw.talkativeness) ? Math.min(1, Math.max(0, raw.talkativeness)) : DEFAULTS.talkativeness,
     voiceEnabled: raw.voiceEnabled === false ? false : true,
+    voiceMode: raw.voiceMode === 'system' ? 'system' : 'neural',
+    voiceName: ['af_heart','af_bella','af_nicole','af_sarah','af_kore','af_sky','bf_emma','bf_lily'].includes(raw.voiceName)
+      ? raw.voiceName : DEFAULTS.voiceName,
+    voiceSpeed: Number.isFinite(raw.voiceSpeed)
+      ? Math.max(0.8, Math.min(1.3, raw.voiceSpeed)) : DEFAULTS.voiceSpeed,
     economyMode: raw.economyMode === true,
     quietMode: raw.quietMode === true,
     personalityMode: ['girlfriend','best_friend','gaming_partner','productivity','friendly'].includes(raw.personalityMode) ? raw.personalityMode : DEFAULTS.personalityMode,
@@ -310,6 +320,35 @@ function registerIpc() {
     if (!Object.hasOwn(allowed, kind)) return { ok:false };
     try { await shell.openExternal(allowed[kind]); return { ok:true }; }
     catch { return { ok:false }; }
+  });
+  ipcMain.handle('mya:voice-status', () => neuralVoice.status());
+  ipcMain.handle('mya:voice-install', async event => {
+    if (!window || event.sender.id !== window.webContents.id)
+      return { error: 'Unauthorized voice installation request' };
+    try { return await neuralVoice.init({allowDownload:true}); }
+    catch(error) { return { ...neuralVoice.status(), error:error.message }; }
+  });
+  ipcMain.handle('mya:voice-load', async () => {
+    try { return await neuralVoice.init({allowDownload:false}); }
+    catch(error) { return { ...neuralVoice.status(), error:error.message }; }
+  });
+  ipcMain.handle('mya:voice-synthesize', async (event, raw) => {
+    if (!window || event.sender.id !== window.webContents.id)
+      return { error:'Unauthorized voice request' };
+    const settings = currentSettings();
+    if (settings.quietMode || !settings.voiceEnabled || settings.voiceMode !== 'neural')
+      return { error:'Neural voice is disabled' };
+    const spoken = cleanText(raw,1200);
+    if (!spoken) return { error:'No speech text' };
+    try {
+      return { bytes:await neuralVoice.synthesize(spoken, {
+        voice:settings.voiceName, speed:settings.voiceSpeed
+      }) };
+    } catch(error) { return { error:error.message }; }
+  });
+  ipcMain.handle('mya:voice-stop-speech', () => {
+    neuralVoice?.cancelSpeech();
+    return { ok:true };
   });
   ipcMain.handle('mya:engine-status', () => localEngine.status());
   ipcMain.handle('mya:engine-choose', async (_event, kind) => {
@@ -757,6 +796,7 @@ function registerIpc() {
     quitting = true;
     activeChat?.abort();
     localEngine?.stop();
+    neuralVoice?.stop();
     stopObservation();
     app.quit();
   });
@@ -764,6 +804,12 @@ function registerIpc() {
 app.whenReady().then(() => {
   if (!singleInstance) return;
   localEngine = new MyaLocalEngine({ configPath: userFile('mya-local-engine.json') });
+  neuralVoice = new MyaNeuralVoice({ dataDir:userFile('voice') });
+  if (neuralVoice.installed()) {
+    // Already-approved cached voice loads offline. No silent first-run download.
+    neuralVoice.init({allowDownload:false}).catch(error =>
+      console.warn('Mya voice could not initialize offline:', error.message));
+  }
   configurePermissions();
   registerIpc();
   createWindow();
@@ -779,6 +825,7 @@ app.on('before-quit', () => {
   activeTranscription?.abort();
   activeChat?.abort();
   localEngine?.stop();
+  neuralVoice?.stop();
   stopObservation();
 });
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
