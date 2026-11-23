@@ -66,8 +66,14 @@
         <strong>Mya's mind</strong>
         <p class="hint">Mya runs her own intelligence on your computer and starts automatically when its model is installed.</p>
         <p id="engine-status" class="hint" aria-live="polite">Checking Mya's brain…</p>
+        <label>Local conversation model
+          <select id="brain-model-tier">
+            <option value="standard">Standard · Qwen3 4B · best conversational quality · 2.5 GB</option>
+            <option value="lite">Lite · Qwen3 1.7B · lower RAM needs · 1.28 GB</option>
+          </select>
+        </label>
         <div id="brain-install-controls" class="controls">
-          <button id="install-brain" class="primary">Install Mya's brain · ~2.5 GB</button>
+          <button id="install-brain" class="primary">Install Mya's brain</button>
           <button id="cancel-brain-install" disabled>Cancel installation</button>
         </div>
         <p class="hint" id="brain-download-progress" aria-live="polite">No external AI service. A one-time, user-approved download installs the official llama.cpp CPU engine and an Apache-2.0 Qwen3-4B language model. Then Mya talks entirely offline.</p>
