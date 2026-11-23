@@ -1,5 +1,35 @@
 # Mya Desktop (Electron) — local-first runtime
 
+## November 23 — avatar orientation and conversation recovery
+
+**Both problems were addressed in code; Windows visual/audio acceptance is still pending.**
+
+- **Upside-down character:** the renderer detects head-above-hips orientation and corrects inverted or sideways imports by rotating the avatar **root** only, never individual bones or meshes. A reversible **Flip 180°** button appears next to recenter if your file uses unusual rig coordinates. Recenter resets the manual flip; the Kawaii animation rig and existing materials are unchanged.
+- **No AI conversation:** older source checkouts lacked the required GGUF weights and llama.cpp executable, so the previously removed setup screen left Mya unable to reply. Settings now offers **Install Mya's brain**, with Standard (Qwen3 4B Q4_K_M, approximately 2.5 GB) or Lite (Qwen3 1.7B Q4_K_M, approximately 1.28 GB) options. Both use commercially friendly Apache-2.0 model repositories and a pinned official Windows CPU llama.cpp release. SHA-256 is checked before files are activated. This is a **one-time, explicitly approved download**, not a cloud inference or AI-service connection.
+- **Voice input:** Settings now includes **Install local listening** using the Apache-2.0 \`onnx-community/whisper-tiny.en\` ONNX model. After a first approved download, microphone recognition runs in a local worker rather than requiring a separate whisper.cpp server on port 8080. Press the 🎙 microphone and speak; Relay sends the recognized text into the same private conversation pipeline.
+- **Voice output:** choose **Install neural voice** for Kokoro speech. Until that is installed, Mya can use the Windows system speech voice when voice output is enabled.
+
+### Windows recovery steps
+
+In PowerShell, from the **repository root** \`C:\Users\kille\Documents\RelayUnity\`:
+
+\`\`\`powershell
+git pull origin main
+cd desktop
+npm install
+npm start
+\`\`\`
+
+If your terminal already ends in \`\\desktop\`, do **not** run \`cd desktop\` again. The new streaming ZIP installer requires \`npm install\` after pulling.
+
+In Mya, open **Settings → Mya's mind**, choose Standard or Lite, click **Install Mya's brain** and approve the exact download. Watch progress. When the status shows **Mya is awake**, type a message in Chat. In Settings, enable local listening to talk using the microphone, and install the neural voice for higher-quality spoken responses. No separate Ollama/Whisper server, service login, or remote AI account is necessary.
+
+Downloaded models are stored under the current Windows user's Electron application-data directory rather than in GitHub or protected Program Files. Each bundle is verified against a published upstream SHA-256. Model downloading requires initial internet access; conversation and speech generation remain local afterwards.
+
+**Remaining limitation:** GitHub Actions has checked syntax and isolated Node logic, including orientation detection and pinned download verification, but no live user-PC GGUF download/load, VRM render, Whisper audio, or Kokoro speaker test has been performed. A 4B CPU model may respond slowly or require substantial RAM; choose Lite first if memory is constrained.
+
+
+
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
 ## Persistent local Relay memory core
@@ -135,7 +165,7 @@ npm test
 npm start
 ```
 
-Mya automatically starts her local intelligence when its model files are present. Import your GLB/VRM and test the avatar separately. The microphone needs local whisper.cpp; the screen observer needs a multimodal-capable GGUF and, when required, a matching mmproj GGUF. No Ollama installation is necessary.
+Mya automatically starts her local intelligence when its model files are present. Import your GLB/VRM and test the avatar separately. The microphone uses the optional installed local Whisper worker; the screen observer needs a multimodal-capable GGUF and, when required, a matching mmproj GGUF. No Ollama installation is necessary.
 
 ## Mya speech + expression integration
 
@@ -149,12 +179,12 @@ For a no-services-required animation preview, import the exact GLB, open Setting
 
 ## Push-to-talk voice and local speech recognition
 
-Voice input is now coded through the **🎙 microphone button**. It requires a **local whisper.cpp server** listening at `127.0.0.1:8080`, with a compatible Whisper model loaded. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Mya's private GGUF engine supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
+Voice input is now coded through the **🎙 microphone button**. It now uses a **locally installed Whisper Tiny ONNX model** and dedicated worker; the user grants model-download permission once. See [whisper.cpp server setup](https://github.com/ggml-org/whisper.cpp/tree/master/examples/server). Mya's private GGUF engine supplies the conversation response; whisper.cpp supplies speech recognition. The two are independent.
 
 - Click 🎙 to authorize a single microphone recording, then click again to stop (or wait up to 15 seconds).
 - Audio is converted to standard 16 kHz mono PCM WAV in memory and submitted to localhost only. No audio recordings are saved to disk by this app.
 - A persistent microphone indicator displays when capture is active. Closing or minimizing cancels recording. A locally transcribed utterance becomes a user chat message.
-- No wake word, hands-free always-listening, full-duplex barge-in, or expressive neural TTS is implemented yet. The existing voice response is system TTS, not accurate lip sync.
+- No wake word, always-listening background microphone or full-duplex audio is implemented. Kokoro neural speech is optional and waveform-driven mouth opening is an approximation, not phoneme-accurate lip sync.
 
 ## Conversation continuity and long-term memory
 
