@@ -382,10 +382,10 @@ function registerIpc() {
   });
   ipcMain.handle('mya:brain-install-status', () =>
     brainInstaller?.status() || {stage:'idle',busy:false});
-  ipcMain.handle('mya:brain-install', async event => {
+  ipcMain.handle('mya:brain-install', async (event,tier) => {
     if(!window || event.sender.id!==window.webContents.id)
       return {ok:false,error:'Unauthorized local model installation request'};
-    return brainInstaller.install();
+    return brainInstaller.install(tier==='lite'?'lite':'standard');
   });
   ipcMain.handle('mya:brain-install-cancel', event => {
     if(!window || event.sender.id!==window.webContents.id)return {ok:false};
