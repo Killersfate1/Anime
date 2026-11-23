@@ -39,9 +39,14 @@ const BASE_OPTIONS = {
   enabled: false, x: 0, y: -0.10, z: 0.10, width: 0.035, height: 0.010, faceBack: false
 };
 export class MyaFace {
-  constructor(avatar, options = {}) {
+  constructor(avatar, options = {}, vrm = null) {
     this.avatar = avatar;
+    this.vrm = vrm;
+    this.expressionManager = vrm?.expressionManager || null;
     this.rig = findFaceChannels(avatar);
+    // VRM humanoid mappings work even when imported bone names are arbitrary.
+    const vrmHead = vrm?.humanoid?.getRawBoneNode?.('head');
+    if (vrmHead) this.rig.head = vrmHead;
     this.fallback = null;
     this.options = { ...BASE_OPTIONS };
     this.talking = false;
@@ -60,6 +65,10 @@ export class MyaFace {
       hasHead: !!this.rig.head,
       fallbackAvailable: !!this.rig.head,
       fallbackEnabled: !!this.fallback?.visible,
+      vrmVersion: this.vrm?.meta?.metaVersion ?? null,
+      vrmExpressions: this.expressionManager
+        ? ['aa', 'ee', 'oh', 'happy', 'sad', 'blink', 'surprised']
+            .filter(name => !!this.expressionManager.getExpression?.(name)) : [],
       accurateLipSync: false // system TTS has no waveform/phoneme timings
     };
   }
@@ -132,12 +141,27 @@ export class MyaFace {
       blinkLeft: 0,
       blinkRight: 0
     };
-    for (const entry of this.rig.morphs) {
+    if (this.expressionManager) {
+      // VRM manages its own expression morph targets. Do not overwrite them
+      // directly or its update() method would fight the face controller.
+      const expressionTargets = {
+        aa: this.viseme === 'open' || this.viseme === 'closed' ? mouth : 0,
+        ee: this.viseme === 'wide' ? mouth : 0,
+        oh: this.viseme === 'round' ? mouth : 0,
+        happy: this.emotion === 'happy' || this.emotion === 'playful' ? 0.5 : 0,
+        sad: this.emotion === 'concerned' ? 0.3 : 0,
+        surprised: this.emotion === 'surprised' ? 0.5 : 0
+      };
+      for (const [name, value] of Object.entries(expressionTargets)) {
+        if (this.expressionManager.getExpression?.(name))
+          this.expressionManager.setValue(name, value);
+      }
+    } else for (const entry of this.rig.morphs) {
       const target = Math.max(entry.baseline, morphValue[entry.channel] || 0);
       const current = entry.mesh.morphTargetInfluences[entry.index];
       entry.mesh.morphTargetInfluences[entry.index] = THREE.MathUtils.damp(current, target, 12, dt);
     }
-    if (this.rig.jaw && this.jawStart) {
+    if (!this.expressionManager && this.rig.jaw && this.jawStart) {
       const jaw = new THREE.Quaternion().setFromEuler(new THREE.Euler(mouth * 0.17, 0, 0));
       this.rig.jaw.quaternion.copy(this.jawStart).multiply(jaw);
     }
@@ -148,9 +172,15 @@ export class MyaFace {
     }
   }
   dispose() {
-    for (const entry of this.rig.morphs)
+    if (this.expressionManager) {
+      for (const name of ['aa', 'ee', 'oh', 'happy', 'sad', 'surprised']) {
+        if (this.expressionManager.getExpression?.(name))
+          this.expressionManager.setValue(name, 0);
+      }
+    } else for (const entry of this.rig.morphs)
       entry.mesh.morphTargetInfluences[entry.index] = entry.baseline;
-    if (this.rig.jaw && this.jawStart) this.rig.jaw.quaternion.copy(this.jawStart);
+    if (!this.expressionManager && this.rig.jaw && this.jawStart)
+      this.rig.jaw.quaternion.copy(this.jawStart);
     if (this.fallback) {
       this.rig.head?.remove(this.fallback);
       this.fallback.traverse(obj => {
