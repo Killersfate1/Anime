@@ -32,26 +32,28 @@ The desktop application can launch its **own local AI brain automatically** if a
 
 **Release status:** This is a packaging path, not a finished downloadable installer. No real GGUF server, installed neural voice, audio output, or Windows end-to-end workflow has been verified during this development session. Bundled models significantly increase installer size and RAM use; choose weights appropriate for target PCs.
 
-## Mya Local AI — first-party desktop inference
+## Mya's integrated local intelligence
 
-**Ollama is no longer required or used by this application.** The Electron app now owns its local inference process through the open-source llama.cpp `llama-server` engine, with a user-approved GGUF model. Mya's personality, memory, streaming conversations, UI, private model selection, and controlled internet-research logic are part of this repo. The model weights and runtime executable are *not* committed or bundled; compatible open model weights are trained by their respective creators, not by Mya.
+**There is no AI service connection flow.** Mya manages her own inference process on this PC. No Ollama, Convai, cloud AI account, API-key login, external AI-service selector, or manual Start AI button is part of the application UI.
 
-### One-time Windows setup (inside the app)
+When Mya starts, she checks for her own licensed language model and runtime and launches them internally. The user sees only whether **Mya is awake**, **waking up**, or **missing her local brain files**. Responses stream into the chat and preserve recent conversation context; approved memories remain separate.
 
-1. Download an official Windows build from [llama.cpp releases](https://github.com/ggml-org/llama.cpp/releases) and extract it with its accompanying DLLs.
-2. Download a compatible **instruction-tuned GGUF model** (a 2B–4B Q4 quantization is a reasonable starting point for modest hardware). Review the model's license and memory requirements.
-3. From `desktop/`, run `npm install` and `npm start`. Open **Settings → Mya Local AI Engine**, select `llama-server.exe`, select your `.gguf`, then click **Start Mya AI**.
-4. Chat in Mya. Replies stream live; **Stop response** interrupts the current generation. Recent turns remain in RAM and approved memories stay separate. Click **Stop AI** to stop the inference process.
-5. Optional: Instead of selecting each file, put `llama-server.exe` (and its DLLs) in `desktop/runtime/` and exactly one model GGUF in `desktop/runtime/models/` for auto-discovery. Those files are excluded from GitHub.
-6. Start with **GPU layers: 0** for broad compatibility. Increase only if your GPU has adequate VRAM; a large GGUF can exhaust RAM. A separate multimodal `mmproj` is required for models that need it for image vision.
+**Important:** the source repository currently excludes the model weights and native inference executable. This is intentional because weights and redistributable binaries have separate licenses and can be several gigabytes. Therefore a fresh source checkout cannot hold real conversations until those files are supplied. The UI does not pretend otherwise.
 
-The engine listens only on `127.0.0.1:18931`, authenticates with a new local-only key for each launch, and does not expose its own web UI. Mya's optional external research remains disabled by default. Microphone speech recognition still requires a separate local whisper.cpp server; no cloud transcription is silently enabled.
+### Packaging the local brain (developer/build step, not an AI-service connection)
 
-**Limitations:** No Windows model-loading or GPU test has been run from this development environment; installation, model compatibility, speech quality, memory usage, and avatar visuals must be verified on the actual PC. The inference engine is open-source third-party software, and GGUF model redistribution/commercial rights depend on the chosen weights.
+1. Place an officially obtained, compatible Windows `llama-server.exe` and its DLLs inside `desktop/runtime/`.
+2. Place exactly one compatible, licensed instruction-tuned GGUF in `desktop/runtime/models/`.
+3. Run `npm run build:windows` on Windows. A preflight prevents packaging without the required local brain.
+4. The built application discovers and starts its own local model when Mya launches. Internally, inference remains restricted to loopback with a per-launch authentication token. No account or AI-provider connection is needed.
+
+Optional internet **research** is separate from AI inference and remains disabled by default; if enabled, search queries are sent to the chosen public search source. It never uploads Mya's conversations or screen captures to a hosted AI model.
+
+Typing and speaking Mya's replies can work entirely offline after components are installed. Microphone *speech recognition* is a separate unfinished integration: this source still expects a local recognizer on port 8080 and does not yet bundle one. Do not advertise fully integrated hands-free voice conversation until that is repaired and tested on Windows.
 
 ## Mya's local AI girlfriend personality and internet research
 
-Mya runs conversations with the GGUF you select inside the app. Settings now includes **Companion mode** (girlfriend, best friend, gaming partner, productivity, friendly), **Affection**, and **Talkativeness**. The default is an affectionate, lively, playful, independent anime-girlfriend personality. The runtime and model files must be installed or selected locally once; no cloud model API is needed.
+Mya runs conversations through her own local language model when it is included in the build. Settings now includes **Companion mode** (girlfriend, best friend, gaming partner, productivity, friendly), **Affection**, and **Talkativeness**. The default is an affectionate, lively, playful, independent anime-girlfriend personality. The model and runtime must be packaged for Mya to converse; no cloud model API is used.
 
 **Internet access is optional and starts OFF.** Enable it in Settings to let Mya look up public information while keeping the chat model local. Public search engines receive a brief sanitized query only; neither saved memories nor screen captures are passed to search engines. This permission is separate from screen observation. Supported providers:
 
@@ -121,7 +123,7 @@ npm test
 npm start
 ```
 
-In Settings, configure **Mya Local AI Engine** and start it. Import your GLB/VRM and test the avatar separately. The microphone needs local whisper.cpp; the screen observer needs a multimodal-capable GGUF and, when required, a matching mmproj GGUF. No Ollama installation is necessary.
+Mya automatically starts her local intelligence when its model files are present. Import your GLB/VRM and test the avatar separately. The microphone needs local whisper.cpp; the screen observer needs a multimodal-capable GGUF and, when required, a matching mmproj GGUF. No Ollama installation is necessary.
 
 ## Mya speech + expression integration
 
