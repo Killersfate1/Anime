@@ -2,6 +2,33 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Windows startup and model-import recovery
+
+The previous hard-coded model-hash refusal was replaced with **GLB structure validation and an explicit confirmation dialog**. The original uploaded Mya GLB is still recognized by SHA-256. If you intentionally select a different GLB with a usable skinned rig, Mya warns that it differs, shows the file/hash/joint count, and lets you approve it. Existing avatars are backed up before replacement. User-approved model selection is stored locally; no avatar bytes are published to GitHub. External buffers and remote textures are rejected, so import a self-contained GLB.
+
+To update an already cloned copy from its `desktop` folder:
+
+```powershell
+git pull origin main
+npm install
+npm run check
+npm test
+npm start
+```
+
+Do **not** use `cd desktop` again if your PowerShell prompt already ends in `\\desktop`.
+
+**Startup memory mitigation:** The binary GLB and Kawaii FBX files are now sent over typed-array IPC rather than base64 text. At launch, only the idle animation is parsed; other Kawaii gestures load sequentially on demand and the cache retains at most four actions. A single-instance lock stops duplicate Electron windows from consuming memory. These changes reduce pressure but don't prove the underlying Windows V8/GPU crash is solved.
+
+**Optional GPU-driver fallback** in PowerShell:
+
+```powershell
+$env:MYA_SOFTWARE_RENDERING = '1'
+npm start
+```
+
+Electron now records renderer/GPU crashes to `mya-crashes.log` inside its user-data folder. No screen images, chat content or microphone data are included in that crash log. The Chromium `crashpad not connected` message is not on its own proof of the original crash cause. Do not raise Node's heap limit blindly to hide a leak.
+
 ## Run on Windows
 
 1. Install Node.js and Ollama. Download a local text+vision model, e.g. `ollama pull gemma3:4b`.
@@ -62,7 +89,7 @@ Run `npm run check` to syntax-check the Electron source and `npm test` for initi
 
 ## Still incomplete or unverified
 
-- **GitHub model copy**: the GLB is in the ChatGPT attachment but not in the repo; the connected GitHub file writer accepts UTF-8 text only. Import from your local GLB file at runtime as above. The importer verifies its SHA-256 against `avatar-manifest.json` so no substitute model is silently accepted. To upload the exact GLB to public GitHub `main` from Windows, use the verified `scripts/import-mya-glb.ps1` script after checking your licensing/privacy obligations.
+- **GitHub model copy**: the GLB is in the ChatGPT attachment but not in the repo; the connected GitHub file writer accepts UTF-8 text only. Import from your local GLB file at runtime as above. The importer verifies the GLB's structure; the original SHA-256 is recognized, and an explicitly selected different skinned avatar requires user confirmation. A current avatar is backed up before replacement. To upload the exact GLB to public GitHub `main` from Windows, use the verified `scripts/import-mya-glb.ps1` script after checking your licensing/privacy obligations.
 - **Kawaii FBX in Electron:** This branch now includes `desktop/kawaii.mjs`, an experimental runtime retargeting bridge that loads 12 allowlisted FBX clips and maps the inspected bone names to the canonical GLB skeleton. **No actual Windows runtime/pose test has been run**, so hands, orientation, clip loops and facial/cloth interactions may still require corrective calibration. Unity and Three.js remain separate runtimes.
 - **Facial expressions and real lip sync:** Uploaded GLB has no morph targets/embedded animations and no verified jaw bone. Do not fake a lip-sync capability. Rig extensions require dedicated work.
 - **Screen awareness:** Only single still-frame local image analysis is implemented, not streaming game telemetry. Some Windows content can appear black or unavailable due to DRM/security. Do not claim to see unsupported windows.
