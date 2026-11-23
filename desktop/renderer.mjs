@@ -39,10 +39,19 @@ const mic = new MyaPushToTalk(
     }
   },
   async (transcript) => {
+    ui('mic-status').textContent = 'Heard: ' + transcript.slice(0, 110) + ' · sending to Mya…';
     ui('chat-input').value = transcript;
     await sendMessage();
+    ui('mic-status').textContent = 'Microphone OFF · Transcript sent to Chat';
   },
-  error => toast('Microphone/recognition: ' + (error?.message || String(error)))
+  error => {
+    const detail = 'Microphone/recognition: ' + (error?.message || String(error));
+    toast(detail);
+    // The push-to-talk controller reports idle in its cleanup path. Keep
+    // the actual failure visible after that status update, not just in a
+    // four-second toast.
+    queueMicrotask(() => { ui('mic-status').textContent = detail; });
+  }
 );
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(34, 1, 0.01, 1000);
@@ -229,7 +238,10 @@ const speechSession = new SpeechSync({
 const neuralVoicePlayer = new MyaVoicePlayer(api, {
   onStart: () => speechSession.onStart({emotion: speechEmotion(neuralVoicePlayer.spokenText), text:neuralVoicePlayer.spokenText}),
   onEnd: () => speechSession.onEnd(),
-  onError: error => toast('Neural voice: ' + error),
+  onError: error => {
+    ui('neural-voice-status').textContent = 'Neural voice playback failed: ' + error;
+    toast('Neural voice: ' + error);
+  },
   onLevel: level => face?.setViseme('open', level)
 });
 function faceSettings() {
@@ -837,19 +849,27 @@ ui('clear-chat').addEventListener('click', async () => {
   message('New session. I won’t keep that conversation as context. ♡');
 });
 ui('mic-toggle').addEventListener('click', async () => {
-  if (mic.state === 'recording') { await mic.stop(); return; }
-  if (mic.state !== 'idle') { await mic.cancel(); return; }
-  const state=await api.listeningStatus();
-  if (!state.ready) {
-    showTab('settings');
-    toast('Install local listening in Settings to speak through your microphone.');
-    return;
+  try {
+    if (mic.state === 'recording') { await mic.stop(); return; }
+    if (mic.state !== 'idle') { await mic.cancel(); return; }
+    const status = await api.listeningStatus();
+    if (!status?.ready) {
+      const detail = status?.error || 'Local listening has not finished loading. Check Settings → Let Mya hear you.';
+      ui('mic-status').textContent = 'Microphone unavailable · ' + detail;
+      showTab('settings');
+      toast(detail);
+      return;
+    }
+    // Interrupt playback so Mya does not record her own speech.
+    neuralVoicePlayer.cancel();
+    speechSession.cancel();
+    playMyaGesture('Idle');
+    await mic.start();
+  } catch (error) {
+    const detail = 'Microphone startup failed: ' + (error?.message || String(error));
+    ui('mic-status').textContent = detail;
+    toast(detail);
   }
-  // Interrupt Mya so speech doesn't contaminate the user's recording.
-  neuralVoicePlayer.cancel();
-  speechSession.cancel();
-  playMyaGesture('Idle');
-  await mic.start();
 });
 ui('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter') sendMessage(); });
 ui('import-model').addEventListener('click', importModel);
@@ -879,7 +899,10 @@ function showNeuralVoiceStatus(status) {
         ? 'Voice error: ' + status.lastError
         : status.installed ? 'Voice installed · loading…' : 'Neural voice not installed yet';
   ui('install-voice').disabled = status.ready || status.state === 'installing' || status.state === 'loading';
-  ui('preview-neural-voice').disabled = !status.ready;
+  // A missing Kokoro model must not disable testing the built-in Windows
+  // speech fallback. Both paths are testable without a chat response.
+  ui('preview-neural-voice').disabled = false;
+  ui('preview-neural-voice').textContent = status.ready ? 'Hear Mya\'s voice' : 'Test Windows voice';
 }
 async function refreshNeuralVoice() {
   try { showNeuralVoiceStatus(await api.neuralVoiceStatus()); }
@@ -922,8 +945,30 @@ ui('install-voice').addEventListener('click', async () => {
   finally { clearInterval(poll); await refreshNeuralVoice(); }
 });
 ui('preview-neural-voice').addEventListener('click', async () => {
-  await saveSettings();
-  say('Hey! It’s Mya. How does my new voice sound? I’m so excited to talk with you!');
+  try {
+    await saveSettings();
+    if (!currentSettings.voiceEnabled) {
+      const detail = 'Enable “Speak Mya’s replies aloud” to test the voice.';
+      ui('neural-voice-status').textContent = detail;
+      toast(detail);
+      return;
+    }
+    if (currentSettings.quietMode) {
+      const detail = 'Quiet mode is on. Turn it off to test the voice.';
+      ui('neural-voice-status').textContent = detail;
+      toast(detail);
+      return;
+    }
+    const neuralReady = currentSettings.voiceMode !== 'system' && (await api.neuralVoiceStatus()).ready;
+    ui('neural-voice-status').textContent = neuralReady
+      ? 'Testing Kokoro voice output…'
+      : 'Testing Windows speech fallback (Kokoro not selected or not ready)…';
+    await say('Hey! It’s Mya. How does my voice sound? I’m excited to talk with you!');
+  } catch (error) {
+    const detail = 'Voice preview failed: ' + (error?.message || String(error));
+    ui('neural-voice-status').textContent = detail;
+    toast(detail);
+  }
 });
 ui('stop-neural-voice').addEventListener('click', () => {
   neuralVoicePlayer.cancel(); speechSession.cancel();
