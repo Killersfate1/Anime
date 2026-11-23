@@ -56,3 +56,13 @@ This is still an **open acceptance gate**, not a claim that it has already passe
 5. If available, repeat with a VRM 1.0 model. Do not claim VRM 1.0 visual verification from the VRM 0.x test alone.
 
 These tests require Windows rendering and have **not** been completed in this session.
+
+## 2026-11-22 local AI and avatar recovery tests
+
+- Launch after pulling `main`; verify visible materials/texture counts in Settings. No substitute materials or avatar file replacements should occur.
+- If the avatar stays in A-pose, select **Use backup movement**, then **Test Kawaii wave**; the original VRM/GLB should move conservatively without deformation. Uncheck to retest purchased Kawaii FBX retargeting. A static clip should auto-fallback after five seconds.
+- With Ollama running, choose **Affectionate anime girlfriend** and send several messages. Confirm Mya responds playfully but doesn't invent screen awareness or online searches.
+- Enable web research and choose Wikipedia for a general-knowledge lookup. Confirm a query appears with traceable HTTPS sources. Disable it and verify no external request is made.
+- For broader search, choose Brave and provide an API key. Confirm rate limiting, correct citations, and that credential never appears in the UI after saving.
+
+**Not yet visually verified in the user's Windows environment.** Automated tests only cover source and isolated logic.
