@@ -700,7 +700,13 @@ function registerIpc() {
         observation: visibleContext,
         research: sources
       });
-      const messages = [{ role: 'system', content: persona }, ...conversation.messages(question)];
+      // Bound the recent dialogue against the selected GGUF context size.
+      // Preserve complete user/assistant pairs and the current user message.
+      const contextTokens = localEngine.status().contextSize || 4096;
+      const chatBudget = Math.max(2200, Math.min(11500,
+        Math.floor(contextTokens * 2.3) - persona.length));
+      const messages = [{ role: 'system', content: persona },
+        ...conversation.messages(question, chatBudget)];
       const response = await localModel(null, messages, controller.signal,
         {
           numPredict: 580, temperature: 0.70,
