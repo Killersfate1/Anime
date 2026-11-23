@@ -6,8 +6,8 @@
   "main": "main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node --check main.cjs && node --check preload.cjs && node --check renderer.mjs && node --check kawaii.mjs && node --check voice.mjs && node --check pcm-wav.mjs && node --check chat-context.cjs && node --check screen-change.cjs && node --check memory-store.cjs && node --check speech-sync.mjs && node --check face.mjs && node --check avatar-validation.cjs && node --check mya-personality.cjs && node --check web-research.cjs && node --check procedural-motion.mjs",
-    "test": "node --test initiative.test.cjs pcm-wav.test.mjs chat-context.test.cjs screen-change.test.cjs memory-store.test.cjs speech-sync.test.mjs avatar-validation.test.cjs mya-research.test.cjs procedural-motion.test.mjs"
+    "check": "node --check main.cjs && node --check preload.cjs && node --check renderer.mjs && node --check kawaii.mjs && node --check voice.mjs && node --check pcm-wav.mjs && node --check chat-context.cjs && node --check screen-change.cjs && node --check memory-store.cjs && node --check speech-sync.mjs && node --check face.mjs && node --check avatar-validation.cjs && node --check mya-personality.cjs && node --check web-research.cjs && node --check procedural-motion.mjs && node --check local-engine.cjs",
+    "test": "node --test initiative.test.cjs pcm-wav.test.mjs chat-context.test.cjs screen-change.test.cjs memory-store.test.cjs speech-sync.test.mjs avatar-validation.test.cjs mya-research.test.cjs procedural-motion.test.mjs local-engine.test.cjs"
   },
   "dependencies": {
     "three": "^0.181.0",
