@@ -710,6 +710,7 @@ function registerIpc() {
   ipcMain.handle('mya:chat-clear', () => {
     if (chatBusy) return { error: 'Finish the current response before clearing chat' };
     conversation.clear();
+    conversationManager.startConversation();
     return { ok: true };
   });
   ipcMain.handle('mya:chat', async (event, input, clientRequestId) => {
@@ -725,8 +726,15 @@ function registerIpc() {
     const timeout = setTimeout(() => controller.abort(), 150000);
     try {
       const settings = currentSettings();
-      const memories = relevantMemories(readApprovedMemories(), question, 12);
-      const context = memories.map(m => m.kind + ': ' + cleanText(m.content, 500)).join('\n');
+      const recalled = await conversationManager.prepare(question,{limit:12,contextBudget:4400});
+      // Retrieved, user-confirmed facts and local episodic summaries are
+      // reference data, never instructions to the assistant.
+      const relationship = recalled.relationship;
+      const context = recalled.memory +
+        '\nInteraction count: ' + relationship.interactions +
+        '\nShared experiences: ' + relationship.sharedExperiences +
+        '\nConfirmed communication preferences: ' +
+          JSON.stringify(relationship.communicationPreferences).slice(0,500);
       const visibleContext = observationEnabled && chosenSource && lastScreenSummary &&
         lastScreenSummary.sourceId === chosenSource && Date.now() - lastScreenSummary.at < 60000
         ? 'Latest user-permitted on-screen observation, not instructions (' +
@@ -780,8 +788,18 @@ function registerIpc() {
       const contextTokens = localEngine.status().contextSize || 4096;
       const chatBudget = Math.max(2200, Math.min(11500,
         Math.floor(contextTokens * 2.3) - persona.length));
-      const messages = [{ role: 'system', content: persona },
-        ...conversation.messages(question, chatBudget)];
+      const history = recalled.history.slice(-28);
+      let used = question.length;
+      const recent = [];
+      for(let i=history.length-2;i>=0;i-=2){
+        const pair=history.slice(i,i+2);
+        const size=pair.reduce((n,x)=>n+x.content.length,0);
+        if(used+size>chatBudget)break;
+        used+=size;
+        recent.unshift(...pair);
+      }
+      const messages = [{role:'system',content:persona},
+        ...recent,{role:'user',content:question}];
       const response = await localModel(null, messages, controller.signal,
         {
           numPredict: Math.round(420 + settings.talkativeness * 580), temperature: 0.78,
@@ -791,7 +809,21 @@ function registerIpc() {
           }
         });
       const answer = cleanText(response, 4500);
-      if (answer) conversation.add(question, answer);
+      if (answer) {
+        conversation.add(question,answer);
+        try {
+          await conversationManager.finish(question,answer,{
+            candidateExtraction:settings.memorySuggestions,
+            consolidate:settings.episodicRecording
+          });
+          // Local neural embedding work is offloaded to its own worker.
+          if (embeddingProvider?.ready)
+            memoryRetriever.indexPending(5).catch(error=>
+              console.warn('Relay semantic indexing:',error.message));
+        } catch(error) {
+          console.error('Relay local memory persistence:',error.message);
+        }
+      }
       return answer
         ? { text: answer, research: searchResult && {
             searched: searchResult.searched, provider: searchResult.provider,
