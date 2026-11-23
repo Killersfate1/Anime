@@ -12,6 +12,26 @@ const { inspectGlb } = require('./avatar-validation.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
 
+// Optional safe fallback for Windows GPU-driver failures:
+// PowerShell: $env:MYA_SOFTWARE_RENDERING='1'; npm start
+if (process.env.MYA_SOFTWARE_RENDERING === '1' || process.argv.includes('--disable-gpu'))
+  app.disableHardwareAcceleration();
+
+function logRuntimeFault(category, details) {
+  try {
+    const filename = path.join(app.getPath('userData'), 'mya-crashes.log');
+    const previous = fs.existsSync(filename) && fs.statSync(filename).size < 150000
+      ? fs.readFileSync(filename, 'utf8') : '';
+    const info = [new Date().toISOString(), category,
+      String(details.reason || 'unknown').slice(0, 100),
+      'exitCode=' + String(details.exitCode ?? 'unknown')].join(' | ');
+    fs.writeFileSync(filename, previous + info + '\\n', { mode: 0o600 });
+  } catch (error) {
+    console.error('Unable to write crash diagnostic', error.message);
+  }
+}
+
+
 const DEFAULTS = Object.freeze({
   chatModel: 'gemma3:4b',
   visionModel: 'gemma3:4b',
@@ -158,7 +178,22 @@ function createWindow() {
       webSecurity: true
     }
   });
-  window.loadFile(path.join(__dirname, 'index.html'));
+  window.webContents.on('render-process-gone', (_event, details) => {
+    logRuntimeFault('renderer', details);
+    stopObservation();
+    console.error('Mya renderer exited:', details.reason, details.exitCode);
+    try {
+      dialog.showErrorBox('Mya renderer stopped',
+        'Mya encountered a renderer failure. Diagnostic details were saved as mya-crashes.log in the app data folder. ' +
+        'To test software rendering, set MYA_SOFTWARE_RENDERING=1 before npm start.');
+    } catch {}
+  });
+  window.webContents.on('did-fail-load', (_event, errorCode, description) => {
+    console.error('Mya page failed to load:', errorCode, description);
+  });
+  window.loadFile(path.join(__dirname, 'index.html')).catch(error => {
+    console.error('Mya startup error:', error.message);
+  });
   window.once('ready-to-show', () => window?.show());
   window.on('closed', () => { window = null; stopObservation(); });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -583,3 +618,9 @@ app.on('before-quit', () => {
 });
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
+app.on('child-process-gone', (_event, details) => {
+  if (details.type === 'GPU' || details.type === 'Utility') {
+    logRuntimeFault('child:' + details.type, details);
+    console.error('Mya subprocess stopped:', details.type, details.reason);
+  }
+});
