@@ -14,7 +14,7 @@ const mic = new MyaPushToTalk(
   api,
   (status) => {
     const labels = {
-      idle: 'Microphone OFF · Click 🎙 to talk · Requires local whisper.cpp',
+      idle: 'Microphone OFF · Optional local dictation is not bundled yet',
       requesting: 'Requesting microphone permission…',
       recording: 'MICROPHONE ON · Click Stop or wait up to 15 seconds',
       processing: 'Recording stopped · Preparing WAV locally…',
