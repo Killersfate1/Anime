@@ -302,6 +302,15 @@ function registerIpc() {
       accurateLipSyncVerified: false
     };
   });
+  ipcMain.handle('mya:engine-resource', async (_event, kind) => {
+    const allowed = {
+      releases: 'https://github.com/ggml-org/llama.cpp/releases',
+      models: 'https://huggingface.co/models?library=gguf'
+    };
+    if (!Object.hasOwn(allowed, kind)) return { ok:false };
+    try { await shell.openExternal(allowed[kind]); return { ok:true }; }
+    catch { return { ok:false }; }
+  });
   ipcMain.handle('mya:engine-status', () => localEngine.status());
   ipcMain.handle('mya:engine-choose', async (_event, kind) => {
     if (!['engine','model','projector'].includes(kind)) return { error: 'Invalid file type' };
