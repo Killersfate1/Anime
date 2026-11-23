@@ -37,12 +37,14 @@ class ConversationManager {
       proposals=await this.extractor.candidates(q,{useModel:false});
       for(const item of proposals)this.repository.saveFact(item,{autoApprove:false});
     }
-    let consolidated=null;
+    // Episodic summarization may take model inference time. Do not delay
+    // delivering the completed reply; it persists through the same local DB.
     if(consolidate&&this.consolidator){
-      try{consolidated=await this.consolidator.maybeConsolidate(this.conversationId);}
-      catch(error){consolidated={error:error.message};}
+      const id=this.conversationId;
+      setImmediate(()=>this.consolidator.maybeConsolidate(id).catch(error=>
+        console.warn('Relay episode consolidation:',error.message)));
     }
-    return {saved:true,candidates:proposals.length,relationship,consolidated};
+    return {saved:true,candidates:proposals.length,relationship};
   }
 }
 module.exports={ConversationManager};
