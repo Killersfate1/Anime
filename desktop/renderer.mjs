@@ -6,6 +6,7 @@ import { MyaProceduralMotion } from './procedural-motion.mjs';
 import { MyaPushToTalk } from './voice.mjs';
 import { SpeechSync, speechEmotion } from './speech-sync.mjs';
 import { MyaVoicePlayer } from './neural-voice-playback.mjs';
+import { autoUprightAvatar, rotateAvatarManual } from './avatar-orientation.mjs';
 import { MyaFace } from './face.mjs';
 
 const ui = (id) => document.getElementById(id);
@@ -64,6 +65,9 @@ scene.add(fillLight);
 let character = null;
 let activeVRM = null;
 let vrmBaseYaw = 0;
+let avatarBaseQuaternion = new THREE.Quaternion();
+let manualAvatarFlip = false;
+let avatarOrientationStatus = '';
 let kawaii = null;
 let procedural = null;
 let preferProcedural = false;
@@ -273,7 +277,7 @@ function message(text, kind = 'mya') {
 }
 function moveToRest() {
   if (!character) return;
-  character.rotation.y = characterYaw;
+  rotateAvatarManual(character,avatarBaseQuaternion,manualAvatarFlip,characterYaw);
   const box = new THREE.Box3().setFromObject(character);
   const size = box.getSize(new THREE.Vector3());
   modelCenter = box.getCenter(new THREE.Vector3());
@@ -303,8 +307,14 @@ function applyAvatar(gltf) {
   activeVRM = gltf.userData?.vrm || null;
   if (activeVRM?.meta?.metaVersion === '0') VRMUtils.rotateVRM0(activeVRM);
   character = activeVRM?.scene || gltf.scene;
-  vrmBaseYaw = character.rotation.y;
   scene.add(character);
+  const orientation = autoUprightAvatar(character,activeVRM);
+  avatarOrientationStatus=orientation.corrected
+    ? 'Auto-corrected imported avatar orientation'
+    : orientation.available?'Upright humanoid pose detected':'Orientation not measurable · use Flip 180° if needed';
+  manualAvatarFlip=false;
+  avatarBaseQuaternion.copy(character.quaternion);
+  vrmBaseYaw = 0;
   face = new MyaFace(character, faceSettings(), activeVRM);
   faceDiagnostics();
   inspectAvatarMaterials(gltf);
@@ -326,6 +336,7 @@ function applyAvatar(gltf) {
   baseEyes = eyeBones.map(node => node.quaternion.clone());
   characterYaw = vrmBaseYaw;
   moveToRest();
+  ui('avatar-flip').title = avatarOrientationStatus + ' · Flip 180° manually';
   ui('avatar-empty').classList.add('hidden');
   ui('avatar-status').textContent = activeVRM
     ? 'Mya · VRM ' + (activeVRM.meta?.metaVersion || '') + ' · Kawaii loading…'
@@ -837,7 +848,18 @@ ui('mic-toggle').addEventListener('click', async () => {
 ui('chat-input').addEventListener('keydown', event => { if (event.key === 'Enter') sendMessage(); });
 ui('import-model').addEventListener('click', importModel);
 ui('change-avatar').addEventListener('click', importModel);
-ui('avatar-recenter').addEventListener('click', () => { characterYaw = vrmBaseYaw; moveToRest(); });
+ui('avatar-recenter').addEventListener('click', () => {
+  characterYaw = 0;
+  manualAvatarFlip = false;
+  moveToRest();
+});
+ui('avatar-flip').addEventListener('click', () => {
+  if(!character)return;
+  manualAvatarFlip = !manualAvatarFlip;
+  moveToRest();
+  ui('avatar-status').textContent = (manualAvatarFlip ? 'Manual 180° rotation active' : avatarOrientationStatus) +
+    ' · Original avatar and animations preserved';
+});
 ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
@@ -1040,7 +1062,7 @@ ui('avatar-stage').addEventListener('pointermove', event => {
   const diff = event.clientX - pointerX;
   pointerX = event.clientX;
   characterYaw += diff * 0.013;
-  character.rotation.y = characterYaw;
+  rotateAvatarManual(character,avatarBaseQuaternion,manualAvatarFlip,characterYaw);
 });
 window.addEventListener('pointerup', () => { pointerX = null; });
 window.addEventListener('beforeunload', () => { neuralVoicePlayer.dispose(); speechSession.cancel(); mic.cancel(); });
