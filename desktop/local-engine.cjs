@@ -200,7 +200,7 @@ class MyaLocalEngine {
       if (!response.ok) return false;
       const data = await response.json();
       return data.status === 'ok' || data.status === 'ready' ||
-        data.status === 'healthy' || data.status === 'loading model' && false;
+        data.status === 'healthy';
     } catch { return false; }
   }
   async start() {
