@@ -6,7 +6,7 @@
 
 1. Get the current `main` of `Killersfate1/Anime`.
 2. Install Node.js and the project's Electron dependencies: `cd desktop; npm install`.
-3. Select a locally installed llama.cpp `llama-server` executable and instruction-tuned GGUF through Mya's Settings, then click **Start Mya AI**. For vision, select a multimodal-compatible model and any required matching mmproj GGUF.
+3. Use a Windows build containing Mya's licensed local language model and llama.cpp inference files. The app starts its own brain automatically. For optional vision, the build also needs a multimodal-compatible model and matching mmproj when required.
 4. For voice input, install/run the `whisper.cpp` server on `127.0.0.1:8080` with a speech-recognition model.
 5. Supply the **exact** Mya GLB, SHA-256 `2fd4937d69168f4234854dd634f0135e3a92165f16b5918dc52942a78ed09618`. Import it through Mya's desktop UI, or place it under `Assets/UserAssets/Mya.glb`. The file itself is not committed to the public repository.
 6. Execute `npm run check`, `npm test`, then `npm start`.
@@ -15,7 +15,7 @@
 
 | Step | Action | Expected result | Current status |
 |---|---|---|---|
-| 1 | Open Mya and click Settings > Check services | Canonical GLB verified; 12 Kawaii FBX files; Mya GGUF engine running; whisper.cpp reachable | **Not run on Windows** |
+| 1 | Open Mya and click Settings > Check Mya | Canonical GLB verified; 12 Kawaii FBX files; Mya's local mind ready or an accurate missing-files message | **Not run on Windows** |
 | 2 | Select Mya's exact GLB | Canonical character appears, materials/hair/rig intact; no replacement model | **Not visually verified** |
 | 3 | Click Test Kawaii wave | One properly retargeted wave, smooth exit to idle, no clipping/twitching | **Not visually verified** |
 | 4 | Check facial diagnostics | No jaw or morph targets in supplied GLB; optional fallback starts OFF | **GLB contents verified; UI not verified** |
@@ -33,7 +33,7 @@
 - The previously uploaded Mya GLB has **no facial morph targets and no jaw bone**. Imported VRMs may have native facial expression presets and spring bones. Real viseme-driven lip sync, blink and smile cannot be achieved by mapping nonexistent targets. The optional calibrated mouth overlay is reversible, but it is an approximation and must not be marketed as accurate phoneme lip sync. A new face rig or authoring pass on the canonical mesh is needed.
 - Kawaii animation FBX retargeting runs in a Three.js bridge; it still needs visual pose calibration for this model, particularly shoulders, fingers, skirt and root pose.
 - The desktop window has not been launched in a Windows GPU environment as part of this session. Automated syntax/unit tests check logic, not actual rendering.
-- System voice is a basic OS TTS, not a high-quality expressive neural voice. The web search/tools subsystem remains incomplete.
+- Kokoro neural voice support exists with Windows TTS fallback but has not been verified on a physical device. Internet research is a separate opt-in feature.
 - GitHub is public and contains third-party assets. Review redistribution permissions and restrict repository visibility before releasing model binaries or assets.
 
 ## Test results recording
@@ -75,9 +75,9 @@ The GLB uploaded in chat contains four embedded WebP texture images; the VRM con
 
 Confirm the Three-VRM loader retains `autoUpdateHumanBones: false` because Mya animates raw humanoid bones. If it is true, `vrm.update()` can overwrite raw-bone Kawaii and procedural pose changes with normalized rest-pose values, causing a persistent A-pose. Verify live VRM wave/idle movement after this loader fix on Windows. Runtime visual verification remains outstanding.
 
-## Local inference acceptance (replaces the Ollama dependency)
+## Integrated local mind acceptance (no AI service connection)
 
-- Confirm Mya's Settings can choose a `llama-server.exe` and valid GGUF model and start/stop the inference process. No other service is required for typed chat.
+- Verify Mya's interface offers no AI-service login, external model/provider selection, API-key connection, manual AI start/stop, or Convai connection menu. With valid local files she should start automatically; without them show a clear missing-model message.
 - Verify the server binds only to `127.0.0.1:18931`, authenticates each inference request using the runtime's in-memory key, and shuts down when Mya exits.
 - Hold a 5–10-turn conversation; verify references to prior turns and streaming text. Interrupt mid-response and confirm no ghost reply is saved to session context.
 - Try the optional voice path using local whisper.cpp; verify that a microphone cancellation does not become a delayed chat message.
