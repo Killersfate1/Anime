@@ -220,8 +220,15 @@ async function loadModel() {
       ui('avatar-status').textContent = 'Import original GLB';
       return;
     }
-    const decoded = Uint8Array.from(atob(data.base64), c => c.charCodeAt(0));
-    loader.parse(decoded.buffer, '', applyAvatar, error => toast('GLB load failed: ' + error.message));
+    // IPC sends binary bytes directly. Avoid multi-megabyte base64 strings,
+    // atob() allocations and a second expensive byte-by-byte copy.
+    const payload = data.bytes;
+    const binary = payload instanceof ArrayBuffer ? payload :
+      ArrayBuffer.isView(payload) ?
+        payload.buffer.slice(payload.byteOffset, payload.byteOffset + payload.byteLength) :
+        null;
+    if (!binary) throw new Error('The avatar importer returned no GLB binary data');
+    loader.parse(binary, '', applyAvatar, error => toast('GLB load failed: ' + error.message));
   } catch (error) { toast('GLB read failed: ' + error.message); }
 }
 function frame(t) {
