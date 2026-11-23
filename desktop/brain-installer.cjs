@@ -20,6 +20,12 @@ const FILES=Object.freeze({
     sha256:'7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5',
     file:'Qwen3-4B-Q4_K_M.gguf',
     maxSize:4*1024*1024*1024
+  },
+  lite:{
+    url:'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/daeb8e2/Qwen3-1.7B-Q4_K_M.gguf',
+    sha256:'d2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5',
+    file:'Qwen3-1.7B-Q4_K_M.gguf',
+    maxSize:2*1024*1024*1024
   }
 });
 const prettyBytes=n=>(n/1024/1024).toFixed(1)+' MiB';
@@ -136,8 +142,9 @@ class MyaBrainInstaller{
   }
   status(){return {...this.progress,busy:!!this.running,modelName:FILES.model.file};}
   stop(){this.controller?.abort();return this.status();}
-  async install(){
+  async install(tier='standard'){
     if(this.running)return this.running;
+    const selected=tier==='lite'?FILES.lite:FILES.model;
     if(process.platform!=='win32')
       throw Error('This installer supports Windows x64 only.');
     if(this.engine.child||this.engine.starting)
@@ -146,7 +153,7 @@ class MyaBrainInstaller{
     this.running=(async()=>{
       const root=path.join(this.dataDir,'runtime');
       const archive=path.join(root,'llama-cpu-x64.zip');
-      const modelPath=path.join(root,'models',FILES.model.file);
+      const modelPath=path.join(root,'models',selected.file);
       const enginePath=path.join(root,'llama-server.exe');
       try{
         this.emit('engine','Getting Mya’s local inference engine from official llama.cpp…');
@@ -161,9 +168,9 @@ class MyaBrainInstaller{
           await fsp.unlink(archive).catch(()=>{});
         }
         if(!isLlamaServer(enginePath))throw Error('Mya inference engine executable is missing');
-        this.emit('model','Downloading licensed Qwen3-4B model · approximately 2.5 GB…');
-        if(!isGGUF(modelPath)||!(await verifyHash(modelPath,FILES.model.sha256))){
-          await downloadPinned(FILES.model,modelPath,{
+        this.emit('model','Downloading licensed Qwen3 '+(tier==='lite'?'Lite · 1.28 GB':'Standard · 2.5 GB')+'…');
+        if(!isGGUF(modelPath)||!(await verifyHash(modelPath,selected.sha256))){
+          await downloadPinned(selected,modelPath,{
             signal:controller.signal,fetchImpl:this.fetchImpl,
             onProgress:p=>this.emit('model',
               'Downloading Mya’s mind · '+prettyBytes(p.current)+
