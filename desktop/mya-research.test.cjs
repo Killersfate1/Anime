@@ -65,3 +65,19 @@ test('only explicit research requests are fast-tracked', () => {
   assert.ok(explicitResearchQuery('Look up the latest boss changes'));
   assert.equal(explicitResearchQuery('hello Mya'), '');
 });
+
+test('Mya default girlfriend is very flirty, mature and talkative', () => {
+  const prompt = buildMyaPrompt();
+  assert.match(prompt, /Flirtation strength: 0.95\/1/);
+  assert.match(prompt, /Talkativeness setting: 0.90\/1/);
+  assert.match(prompt, /mildly naughty jokes/);
+  assert.match(prompt, /consensual and non-graphic/);
+  assert.match(prompt, /For factual, technical, urgent, or focused work requests/);
+});
+test('Mya respects mature banter off and non-romantic modes', () => {
+  const modest = buildMyaPrompt({matureBanter:false, flirtation:0});
+  assert.match(modest, /PG-13/);
+  const work = buildMyaPrompt({mode:'productivity', matureBanter:true, flirtation:1});
+  assert.match(work, /do not force romantic or suggestive dialogue/);
+  assert.doesNotMatch(work, /Adult banter is enabled/);
+});
