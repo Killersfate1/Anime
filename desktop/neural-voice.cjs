@@ -97,7 +97,7 @@ class MyaNeuralVoice {
         this.worker?.postMessage({type:'cancel',id});
         reject(Error('Mya voice request timed out'));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, type });
       try { this.worker.postMessage({ type, id, ...value }); }
       catch(error) { clearTimeout(timer); this.pending.delete(id); reject(error); }
     });
@@ -143,6 +143,12 @@ class MyaNeuralVoice {
     entry.reject(Error('Voice canceled'));
     this.worker?.postMessage({type:'cancel',id});
     return true;
+  }
+  cancelSpeech() {
+    for (const [id, entry] of this.pending) {
+      if (entry.type !== 'speak') continue;
+      this.cancel(id);
+    }
   }
   stop() {
     const worker = this.worker;
