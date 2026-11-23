@@ -68,8 +68,22 @@ function inspectGlb(data, maxBytes = 100 * 1024 * 1024) {
     skins: document.skins.length,
     joints: Math.max(...document.skins.map(s => s.joints?.length || 0)),
     morphTargets: document.meshes.reduce((count, mesh) =>
-      count + (mesh.primitives || []).reduce((n, p) => n + (p.targets?.length || 0), 0), 0)
+      count + (mesh.primitives || []).reduce((n, p) => n + (p.targets?.length || 0), 0), 0),
+    vrmVersion: document.extensions?.VRMC_vrm ? '1.0' :
+      document.extensions?.VRM ? '0.x' : null
   };
 }
 
-module.exports = { inspectGlb };
+function inspectAvatar(data, filenameExtension) {
+  const extension = String(filenameExtension || '').toLowerCase().replace(/^\\./, '');
+  if (extension !== 'glb' && extension !== 'vrm')
+    return { valid: false, reason: 'Only .glb and .vrm avatars are supported' };
+  const inspection = inspectGlb(data);
+  if (!inspection.valid) return inspection;
+  if (extension === 'vrm' && !inspection.vrmVersion)
+    return { valid: false, reason: 'This .vrm does not contain a VRM 0.x or 1.0 extension' };
+  return { ...inspection, extension,
+    format: inspection.vrmVersion ? 'VRM ' + inspection.vrmVersion : 'glTF 2.0 GLB' };
+}
+
+module.exports = { inspectGlb, inspectAvatar };
