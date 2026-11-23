@@ -44,7 +44,8 @@
         <button id="send" class="primary" title="Send message">➤</button>
       </div>
       <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Click 🎙 to talk · Requires local whisper.cpp</p>
-      <p class="hint">Local models only · Audio is not saved or sent to cloud services</p>
+      <div id="research-output" class="research-output hidden" aria-live="polite"></div>
+      <p class="hint">AI conversation stays local. Internet searches are optional and send only search queries to the selected provider.</p>
     </section>
     <section id="tab-screen" class="tab-content hidden">
       <div class="control-group">
@@ -59,6 +60,36 @@
       <label>Conversation model <input id="chat-model" value="gemma3:4b"></label>
       <label>Vision model <input id="vision-model" value="gemma3:4b"></label>
       <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.45"></label>
+      <div class="ai-controls">
+        <strong>Mya's personality</strong>
+        <label>Companion mode
+          <select id="personality-mode">
+            <option value="girlfriend">Affectionate anime girlfriend</option>
+            <option value="best_friend">Playful anime best friend</option>
+            <option value="gaming_partner">Gaming partner</option>
+            <option value="productivity">Work and productivity</option>
+            <option value="friendly">Friendly companion</option>
+          </select>
+        </label>
+        <label>Affection <input id="affection" type="range" min="0" max="1" step="0.05" value="0.78"></label>
+        <p class="hint">Mya uses the local Ollama model for conversation. You choose how affectionate and talkative she is.</p>
+      </div>
+      <div class="ai-controls">
+        <strong>Internet research</strong>
+        <label class="check"><input type="checkbox" id="web-enabled"> Allow Mya to search public websites</label>
+        <label class="check"><input type="checkbox" id="auto-research" checked> Let Mya decide when public research may help</label>
+        <label>Search service
+          <select id="web-provider">
+            <option value="wikipedia">Wikipedia (free, limited coverage)</option>
+            <option value="brave">Brave Search (general web, API key)</option>
+          </select>
+        </label>
+        <label>Brave API key (optional)
+          <input id="web-api-key" type="password" autocomplete="off" placeholder="Add a key only for Brave Search">
+        </label>
+        <div class="controls"><button id="clear-web-key">Clear saved search key</button><span id="web-key-status" class="hint"></span></div>
+        <p class="hint">Internet search is off until enabled. Queries go to your chosen provider; screen captures and saved memories do not. No purchases, logins or page actions.</p>
+      </div>
       <label class="check"><input id="voice-enabled" type="checkbox" checked> Speak responses using system voice</label>
       <label class="check"><input id="economy-mode" type="checkbox"> Economy mode (30 second samples)</label>
       <label class="check"><input id="quiet-mode" type="checkbox"> Quiet mode (also stops screen monitoring)</label>
