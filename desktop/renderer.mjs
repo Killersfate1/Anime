@@ -916,11 +916,51 @@ function renderEngineStatus(info) {
   }
   ui('engine-status').textContent = status + '\n' + detail;
   ui('local-ai-status').textContent = status;
+  ui('open-brain-setup').classList.toggle('hidden',info.ready||info.state==='starting');
+  ui('brain-install-controls').classList.toggle('hidden',info.ready);
+  if(!info.ready && info.state!=='starting')ui('state').textContent='Brain not ready';
+  else if(info.ready && !activeChatRequest)ui('state').textContent='Ready to talk';
 }
 async function refreshEngineStatus() {
   try { renderEngineStatus(await api.engineStatus()); }
   catch (error) { ui('engine-status').textContent = 'Mya’s brain status is unavailable: ' + error.message; }
 }
+function showBrainProgress(progress) {
+  if(!progress)return;
+  const percent=progress.total>0 ? ' · '+Math.floor(progress.current/progress.total*100)+'%' : '';
+  ui('brain-download-progress').textContent=(progress.message||'')+percent;
+  ui('install-brain').disabled=!!progress.busy || progress.stage==='ready';
+  ui('cancel-brain-install').disabled=!progress.busy;
+  if(progress.stage==='ready'){
+    ui('brain-download-progress').textContent='Mya is ready for private offline conversations. ♡';
+    refreshEngineStatus();
+  }
+  if(progress.stage==='error'){
+    toast('Mya installation: '+progress.message);
+    ui('install-brain').disabled=false;
+  }
+}
+api.onBrainInstallProgress(showBrainProgress);
+ui('open-brain-setup').addEventListener('click',()=>showTab('settings'));
+ui('install-brain').addEventListener('click',async()=>{
+  if(!confirm('Install Mya’s private local AI? This downloads approximately 2.5 GB of Apache-2.0 model weights from Qwen/Hugging Face and the official MIT-licensed llama.cpp Windows CPU engine from GitHub. The downloads are verified by SHA-256. Conversation inference stays on this computer after installation. Allow this one-time download?'))return;
+  ui('install-brain').disabled=true;
+  ui('cancel-brain-install').disabled=false;
+  ui('brain-download-progress').textContent='Preparing Mya’s local brain download…';
+  try{
+    const result=await api.installBrain();
+    if(!result.ok)toast('Brain installation failed: '+result.error);
+    else toast('Mya is ready to have conversations! ♡');
+  }catch(error){toast('Brain installation error: '+error.message);}
+  finally{
+    await refreshEngineStatus();
+    showBrainProgress(await api.brainInstallStatus());
+  }
+});
+ui('cancel-brain-install').addEventListener('click',async()=>{
+  await api.cancelBrainInstall();
+  ui('brain-download-progress').textContent='Canceling installation…';
+});
 ui('stop-answer').addEventListener('click', () => api.cancelLocalChat());
 ui('clear-web-key').addEventListener('click', async () => {
   await api.updateSettings({clearWebKey: true});
@@ -1071,6 +1111,7 @@ window.addEventListener('beforeunload', () => { neuralVoicePlayer.dispose(); spe
     await loadSettings();
     await refreshNeuralVoice();
     await refreshEngineStatus();
+    showBrainProgress(await api.brainInstallStatus());
     setInterval(refreshEngineStatus, 2200);
     await loadModel();
     await updateMemories();
