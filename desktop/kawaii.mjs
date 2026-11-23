@@ -29,6 +29,19 @@ for (const side of ['l', 'r']) {
 }
 const normalize = name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '');
 const keyOfTargetBone = name => name.toLowerCase().replace(/_\d+$/, '');
+
+const VRM_TO_FBX = {
+  hips: 'Hips', spine: 'Spine', chest: 'Chest',
+  neck: 'Neck', head: 'Head',
+  leftShoulder: 'Shoulder_L', rightShoulder: 'Shoulder_R',
+  leftUpperArm: 'Upper Arm_L', rightUpperArm: 'Upper Arm_R',
+  leftLowerArm: 'Lower Arm_L', rightLowerArm: 'Lower Arm_R',
+  leftHand: 'Hand_L', rightHand: 'Hand_R',
+  leftUpperLeg: 'Upper Leg_L', rightUpperLeg: 'Upper Leg_R',
+  leftLowerLeg: 'Lower Leg_L', rightLowerLeg: 'Lower Leg_R',
+  leftFoot: 'Foot_L', rightFoot: 'Foot_R',
+  leftToes: 'Toes_L', rightToes: 'Toes_R'
+};
 function getSkinnedMesh(object) {
   let found = null;
   object.traverse(node => { if (!found && node.isSkinnedMesh && node.skeleton) found = node; });
@@ -36,8 +49,9 @@ function getSkinnedMesh(object) {
 }
 
 export class MyaKawaiiAnimation {
-  constructor(character) {
+  constructor(character, vrm = null) {
     this.character = character;
+    this.vrm = vrm;
     this.skinnedMesh = getSkinnedMesh(character);
     this.mixer = new THREE.AnimationMixer(character);
     this.fbxLoader = new FBXLoader();
@@ -138,7 +152,15 @@ export class MyaKawaiiAnimation {
 
       const byName = new Map(source.skeleton.bones.map(b => [normalize(b.name), b.name]));
       const names = {};
-      for (const bone of this.skinnedMesh.skeleton.bones) {
+      if (this.vrm?.humanoid) {
+        const skinnedBoneNames = new Set(this.skinnedMesh.skeleton.bones.map(b => b.name));
+        for (const [humanBone, sourceName] of Object.entries(VRM_TO_FBX)) {
+          const targetBone = this.vrm.humanoid.getRawBoneNode?.(humanBone);
+          const sourceBone = byName.get(normalize(sourceName));
+          if (targetBone && skinnedBoneNames.has(targetBone.name) && sourceBone)
+            names[targetBone.name] = sourceBone;
+        }
+      } else for (const bone of this.skinnedMesh.skeleton.bones) {
         const expected = BONE_NAMES[keyOfTargetBone(bone.name)];
         if (!expected) continue;
         const original = byName.get(normalize(expected));
@@ -149,8 +171,8 @@ export class MyaKawaiiAnimation {
 
       const clip = sourceRoot.animations?.[0];
       if (!clip) throw new Error('No animation in source FBX');
-      const pelvis = this.skinnedMesh.skeleton.bones
-        .find(b => keyOfTargetBone(b.name) === 'pelvis');
+      const pelvis = this.vrm?.humanoid?.getRawBoneNode?.('hips') ||
+        this.skinnedMesh.skeleton.bones.find(b => keyOfTargetBone(b.name) === 'pelvis');
       const retargeted = SkeletonUtils.retargetClip(this.skinnedMesh, source, clip, {
         names,
         hip: pelvis ? names[pelvis.name] || 'Hips' : 'Hips',
