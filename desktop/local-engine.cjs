@@ -287,7 +287,11 @@ class MyaLocalEngine {
   }
   async complete(messages, { signal, numPredict = 350, temperature = 0.7, onDelta = null } = {}) {
     if (this.state !== 'ready' || !this.child)
-      throw new Error('Mya AI is not running. Choose a llama-server executable and GGUF in Settings, then Start Mya AI.');
+      throw new Error(this.state === 'starting'
+        ? 'Mya is waking up. Her local language model is still loading.'
+        : this.hasRuntime()
+          ? 'Mya’s local intelligence could not start. Check diagnostics for the error.'
+          : 'This development build does not include Mya’s local language-model files yet. A complete Mya build must package her brain.');
     const request = {
       model: 'mya',
       messages: toChatMessages(messages, !!this.config.projectorPath),
