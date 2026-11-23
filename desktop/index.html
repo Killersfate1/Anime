@@ -95,6 +95,11 @@
       <label class="check"><input id="quiet-mode" type="checkbox"> Quiet mode (also stops screen monitoring)</label>
       <div class="controls"><button id="save-settings" class="primary">Save settings</button><button id="change-avatar">Change avatar</button></div>
       <div class="face-tools">
+        <strong>Animation diagnostics</strong>
+        <label class="check"><input type="checkbox" id="force-procedural"> Use backup movement if Kawaii animations leave Mya frozen</label>
+        <p class="hint" id="animation-diagnostics">Original model preserved. Kawaii FBX remains available when backup movement is off.</p>
+      </div>
+      <div class="face-tools">
         <strong>Face &amp; speech calibration</strong>
         <p class="hint" id="face-diagnostics">Import GLB / VRM to inspect facial controls.</p>
         <label class="check"><input type="checkbox" id="mouth-enabled"> Enable optional calibrated mouth overlay (experimental)</label>
