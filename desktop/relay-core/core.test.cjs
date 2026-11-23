@@ -130,3 +130,12 @@ test('privacy reset removes conversations, facts, episodes and vectors without r
   assert.equal(db.vectorCandidates('semantic','offline').length,0);
   assert.equal(db.relationship().interaction_count,0);
 });
+
+test('several likes, interests or projects coexist rather than replacing each other',t=>{
+  const {db}=fresh(t);
+  const a=db.saveFact({kind:'preference',predicate:'likes',content:'User likes ramen'},{autoApprove:true});
+  const b=db.saveFact({kind:'preference',predicate:'likes',content:'User likes strategy games'},{autoApprove:true});
+  assert.equal(a.status,'active');
+  assert.equal(b.status,'active');
+  assert.equal(db.facts().length,2);
+});
