@@ -27,3 +27,13 @@ test('clear removes all session context', () => {
   assert.equal(ctx.count(), 0);
   assert.deepEqual(ctx.messages('new'), [{ role: 'user', content: 'new' }]);
 });
+
+test('respects local GGUF context budgets while retaining recent complete exchanges', () => {
+  const ctx = new ChatContext(20);
+  ctx.add('Old question about a sprawling topic', 'An old and relatively long reply');
+  ctx.add('new', 'fresh reply');
+  const limited = ctx.messages('follow-up', 34);
+  assert.deepEqual(limited, [{ role: 'user', content: 'new' },
+    { role: 'assistant', content: 'fresh reply' },
+    { role: 'user', content: 'follow-up' }]);
+});
