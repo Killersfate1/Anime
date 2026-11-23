@@ -48,6 +48,18 @@ const DEFAULTS = Object.freeze({
   mouthHeight: 0.010
 });
 
+// A second npm start must activate the existing Mya window, not launch a
+// duplicate Three.js renderer and another set of FBX loaders.
+const singleInstance = app.requestSingleInstanceLock();
+if (!singleInstance) app.quit();
+else app.on('second-instance', () => {
+  if (window) {
+    if (window.isMinimized()) window.restore();
+    window.show();
+    window.focus();
+  }
+});
+
 let window = null;
 let chosenSource = null;
 let observationEnabled = false; // always OFF after a restart
@@ -601,6 +613,7 @@ function registerIpc() {
   ipcMain.handle('mya:quit', () => { quitting = true; stopObservation(); app.quit(); });
 }
 app.whenReady().then(() => {
+  if (!singleInstance) return;
   configurePermissions();
   registerIpc();
   createWindow();
