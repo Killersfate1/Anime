@@ -529,7 +529,10 @@ async function sendMessage() {
     } else if (result.error) {
       toast(result.error);
       bubble.textContent = result.error;
-      if (result.error.includes('Start Mya AI')) showTab('settings');
+      if (result.error.includes('brain') || result.error.includes('model')) {
+        showTab('settings');
+        await refreshEngineStatus();
+      }
     } else {
       bubble.textContent = result.text;
       showResearch(result.research);
@@ -793,75 +796,27 @@ ui('stop-neural-voice').addEventListener('click', () => {
 });
 function renderEngineStatus(info) {
   if (!info) return;
-  ui('engine-file').textContent = info.engineName || 'None selected';
-  ui('gguf-file').textContent = info.modelName || 'None selected';
-  ui('projector-file').textContent = info.projectorName
-    ? 'Vision projector: ' + info.projectorName
-    : 'No multimodal projector selected (text only).';
-  ui('engine-gpu-layers').value = info.gpuLayers ?? 0;
-  ui('engine-context').value = String(info.contextSize || 4096);
-  const label = info.ready ? 'RUNNING' : (info.state || 'stopped').toUpperCase();
-  ui('engine-status').textContent = 'Mya AI: ' + label +
-    (info.ready ? ' · ' + info.modelName : '') +
-    (info.lastError ? '\n' + info.lastError : '') +
-    (info.error ? '\n' + info.error : '');
-  ui('local-ai-status').textContent = info.ready
-    ? 'Mya AI: running locally'
-    : 'Mya AI: ' + (info.state || 'not started');
-  ui('engine-start').disabled = info.ready || info.state === 'starting';
-  ui('engine-stop').disabled = !info.ready && info.state !== 'starting';
-  const locked = info.ready || info.state === 'starting';
-  for (const field of ['choose-engine','choose-gguf','choose-projector','clear-projector',
-    'engine-gpu-layers','engine-context']) ui(field).disabled = locked;
+  let status, detail;
+  if (info.ready) {
+    status = 'Mya is awake ♡';
+    detail = 'Her local intelligence is running privately on this computer.';
+  } else if (info.state === 'starting') {
+    status = 'Mya is waking up…';
+    detail = 'Loading her local memory and language model.';
+  } else if (!info.engineSelected || !info.modelSelected) {
+    status = 'Mya’s brain has not been installed in this development copy.';
+    detail = 'A complete Mya build needs its own licensed language model and inference files. No external AI account or connection is required.';
+  } else {
+    status = 'Mya’s brain couldn’t start.';
+    detail = info.lastError || 'The local model could not initialize. Check the application logs.';
+  }
+  ui('engine-status').textContent = status + '\n' + detail;
+  ui('local-ai-status').textContent = status;
 }
 async function refreshEngineStatus() {
   try { renderEngineStatus(await api.engineStatus()); }
-  catch (error) { ui('engine-status').textContent = 'Local AI setup error: ' + error.message; }
+  catch (error) { ui('engine-status').textContent = 'Mya’s brain status is unavailable: ' + error.message; }
 }
-async function chooseLocalFile(kind) {
-  try {
-    const info = await api.chooseEngineFile(kind);
-    renderEngineStatus(info);
-    if (info.error) toast(info.error);
-  } catch (error) { toast('File selection failed: ' + error.message); }
-}
-ui('get-engine-link').addEventListener('click', async () => {
-  const result = await api.openEngineResource('releases');
-  if (!result.ok) toast('Could not open official llama.cpp releases');
-});
-ui('get-model-link').addEventListener('click', async () => {
-  const result = await api.openEngineResource('models');
-  if (!result.ok) toast('Could not open GGUF model directory');
-});
-ui('choose-engine').addEventListener('click', () => chooseLocalFile('engine'));
-ui('choose-gguf').addEventListener('click', () => chooseLocalFile('model'));
-ui('choose-projector').addEventListener('click', () => chooseLocalFile('projector'));
-ui('clear-projector').addEventListener('click', async () => {
-  renderEngineStatus(await api.clearProjector());
-});
-ui('engine-start').addEventListener('click', async () => {
-  ui('engine-start').disabled = true;
-  ui('engine-stop').disabled = false;
-  ui('engine-status').textContent = 'Starting Mya local AI · loading model into memory…';
-  try {
-    const options = {
-      gpuLayers: Number(ui('engine-gpu-layers').value),
-      contextSize: Number(ui('engine-context').value)
-    };
-    const configured = await api.configureEngine(options);
-    if (configured.error) { renderEngineStatus(configured); return; }
-    const state = await api.startEngine();
-    renderEngineStatus(state);
-    toast(state.ready ? 'Mya AI is ready to talk! ♡' : (state.error || 'Model not ready'));
-  } catch (error) {
-    ui('engine-status').textContent = 'Could not start AI: ' + error.message;
-  } finally { await refreshEngineStatus(); }
-});
-ui('engine-stop').addEventListener('click', async () => {
-  if (activeChatRequest) await api.cancelLocalChat();
-  const info = await api.stopEngine();
-  renderEngineStatus(info);
-});
 ui('stop-answer').addEventListener('click', () => api.cancelLocalChat());
 ui('clear-web-key').addEventListener('click', async () => {
   await api.updateSettings({clearWebKey: true});
@@ -903,7 +858,7 @@ ui('preview-voice').addEventListener('click', () => {
   say('Hey! I am Mya! This is my voice and mouth calibration test. How do I look?');
 });
 ui('check-mya').addEventListener('click', async () => {
-  ui('mya-diagnostics').textContent = 'Checking local services…';
+  ui('mya-diagnostics').textContent = 'Checking Mya…';
   try {
     const status = await api.diagnostics();
     const model = status.canonicalModel
@@ -913,8 +868,8 @@ ui('check-mya').addEventListener('click', async () => {
     ui('mya-diagnostics').textContent =
       'Selected avatar: ' + model +
       '\nKawaii FBX: ' + kawaiiStatus +
-      '\nMya local AI: ' + (status.localAI.ready ? 'running (' + status.localAI.modelName + ')' : status.localAI.state) +
-      '\nwhisper.cpp: ' + (status.whisper.reachable ? 'reachable' : 'offline') +
+      '\nMya’s mind: ' + (status.localAI.ready ? 'ready' : status.localAI.state) +
+      '\nVoice input: ' + (status.whisper.reachable ? 'available locally' : 'not configured') +
       '\nAnimation quality: NOT verified · Accurate lip sync: NOT verified';
   } catch (error) { ui('mya-diagnostics').textContent = 'Diagnostics failed: ' + error.message; }
 });
@@ -991,6 +946,7 @@ window.addEventListener('beforeunload', () => { neuralVoicePlayer.dispose(); spe
     await loadSettings();
     await refreshNeuralVoice();
     await refreshEngineStatus();
+    setInterval(refreshEngineStatus, 2200);
     await loadModel();
     await updateMemories();
   } catch (error) { toast('Initialization error: ' + error.message); }
