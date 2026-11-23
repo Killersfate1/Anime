@@ -10,6 +10,7 @@ const { compareFrames } = require('./screen-change.cjs');
 const { makeMemory, validMemories, relevantMemories } = require('./memory-store.cjs');
 const { inspectAvatar } = require('./avatar-validation.cjs');
 const { buildMyaPrompt } = require('./mya-personality.cjs');
+const { MyaLocalEngine } = require('./local-engine.cjs');
 const { MyaWebResearch, explicitResearchQuery, shouldConsiderAutoresearch, cleanSearchQuery } = require('./web-research.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
@@ -35,8 +36,7 @@ function logRuntimeFault(category, details) {
 
 
 const DEFAULTS = Object.freeze({
-  chatModel: 'gemma3:4b',
-  visionModel: 'gemma3:4b',
+  // The local GGUF selected in Settings is the only inference model.
   talkativeness: 0.45,
   voiceEnabled: true,
   economyMode: false,
@@ -79,7 +79,9 @@ let micPermissionUntil = 0;
 let transcribing = false;
 let activeTranscription = null;
 let chatBusy = false;
-const conversation = new ChatContext(12);
+const conversation = new ChatContext(20);
+let localEngine = null;
+let activeChat = null;
 const webResearch = new MyaWebResearch();
 let lastApprovedSourceURLs = new Set();
 let previousTinyFrame = null;
@@ -124,8 +126,6 @@ function getSearchKey() {
 function currentSettings() {
   const raw = safeJsonRead('settings.json', {});
   return {
-    chatModel: typeof raw.chatModel === 'string' && /^[a-zA-Z0-9_.:\/-]{1,80}$/.test(raw.chatModel) ? raw.chatModel : DEFAULTS.chatModel,
-    visionModel: typeof raw.visionModel === 'string' && /^[a-zA-Z0-9_.:\/-]{1,80}$/.test(raw.visionModel) ? raw.visionModel : DEFAULTS.visionModel,
     talkativeness: Number.isFinite(raw.talkativeness) ? Math.min(1, Math.max(0, raw.talkativeness)) : DEFAULTS.talkativeness,
     voiceEnabled: raw.voiceEnabled === false ? false : true,
     economyMode: raw.economyMode === true,
@@ -243,19 +243,14 @@ function createWindow() {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
 }
-async function localModel(model, messages, signal, params = {}) {
-  // Only the local Ollama service is contacted; never forward screen data
-  // to an external network by changing renderer input.
-  const response = await fetch('http://127.0.0.1:11434/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, stream: false, messages, options: { num_predict: params.numPredict || 240, temperature: params.temperature ?? 0.45 } }),
-    signal
+async function localModel(_unusedModel, messages, signal, params = {}) {
+  if (!localEngine) throw new Error('Mya local inference runtime is not initialized.');
+  return localEngine.complete(messages, {
+    signal,
+    numPredict: params.numPredict || 350,
+    temperature: params.temperature ?? 0.7,
+    onDelta: params.onDelta || null
   });
-  if (!response.ok) throw new Error('Local Ollama returned HTTP ' + response.status);
-  const json = await response.json();
-  if (typeof json?.message?.content !== 'string') throw new Error('Invalid Ollama response');
-  return json.message.content;
 }
 function cleanText(input, max = 1000) {
   return typeof input === 'string' ? input.trim().slice(0, max) : '';
@@ -291,10 +286,7 @@ function registerIpc() {
         'Assets', 'Animations', entry.file);
       return fs.existsSync(file);
     }).length;
-    const [ollama, whisper] = await Promise.all([
-      localStatus('http://127.0.0.1:11434/api/tags'),
-      localStatus('http://127.0.0.1:8080/')
-    ]);
+    const whisper = await localStatus('http://127.0.0.1:8080/');
     return {
       canonicalModel: !!verifiedAvatarPath(),
       modelLocation: modelInfo()?.source || 'not imported',
@@ -302,12 +294,45 @@ function registerIpc() {
       matchesOriginalGLB: !!modelInfo()?.matchesOriginalUpload,
       kawaiiClips: available,
       kawaiiExpected: Object.keys(kawaiiClips).length,
-      ollama, whisper,
+      localAI: localEngine?.status() || { state:'stopped', ready:false },
+      whisper,
       screenMonitoringEnabled: observationEnabled,
       // This check cannot establish render, rigging, or phoneme quality.
       liveAnimationVerified: false,
       accurateLipSyncVerified: false
     };
+  });
+  ipcMain.handle('mya:engine-status', () => localEngine.status());
+  ipcMain.handle('mya:engine-choose', async (_event, kind) => {
+    if (!['engine','model','projector'].includes(kind)) return { error: 'Invalid file type' };
+    const filters = kind === 'engine'
+      ? [{ name: 'llama.cpp engine', extensions: ['exe'] }]
+      : [{ name: 'GGUF model files', extensions: ['gguf'] }];
+    const result = await dialog.showOpenDialog(window, {
+      title: kind === 'engine' ? 'Choose official llama-server.exe' :
+        kind === 'model' ? 'Choose GGUF language model' : 'Choose optional multimodal projector GGUF',
+      properties: ['openFile'], filters
+    });
+    if (result.canceled || result.filePaths.length !== 1) return localEngine.status();
+    try { return localEngine.setFile(kind, result.filePaths[0]); }
+    catch(error) { return { error: error.message, ...localEngine.status() }; }
+  });
+  ipcMain.handle('mya:engine-clear-projector', () => {
+    try { return localEngine.clearProjector(); }
+    catch(error) { return { ...localEngine.status(), error: error.message }; }
+  });
+  ipcMain.handle('mya:engine-options', (_event, options) => {
+    try { return localEngine.configureOptions(options); }
+    catch(error) { return { ...localEngine.status(), error: error.message }; }
+  });
+  ipcMain.handle('mya:engine-start', async () => {
+    try { return await localEngine.start(); }
+    catch(error) { return { ...localEngine.status(), error: error.message }; }
+  });
+  ipcMain.handle('mya:engine-stop', () => {
+    activeChat?.abort();
+    activeAnalysis?.abort();
+    return localEngine.stop();
   });
   ipcMain.handle('mya:animation-list', () =>
     Object.keys(kawaiiClips).filter(name => {
@@ -605,19 +630,26 @@ function registerIpc() {
       return { ok: true };
     } catch { return { ok: false }; }
   });
+  ipcMain.handle('mya:chat-cancel', () => {
+    if (activeChat) activeChat.abort();
+    return { ok: true };
+  });
   ipcMain.handle('mya:chat-clear', () => {
     if (chatBusy) return { error: 'Finish the current response before clearing chat' };
     conversation.clear();
     return { ok: true };
   });
-  ipcMain.handle('mya:chat', async (_event, input) => {
+  ipcMain.handle('mya:chat', async (event, input, clientRequestId) => {
     const question = cleanText(input, 2000);
     if (!question) return { error: 'Enter a question' };
     if (chatBusy) return { error: 'Mya is still answering the previous message' };
     chatBusy = true;
     lastApprovedSourceURLs = new Set();
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 65000);
+    activeChat = controller;
+    const requestId = typeof clientRequestId === 'string' && /^[a-zA-Z0-9_-]{1,60}$/.test(clientRequestId)
+      ? clientRequestId : '';
+    const timeout = setTimeout(() => controller.abort(), 150000);
     try {
       const settings = currentSettings();
       const memories = relevantMemories(readApprovedMemories(), question, 12);
@@ -669,8 +701,14 @@ function registerIpc() {
         research: sources
       });
       const messages = [{ role: 'system', content: persona }, ...conversation.messages(question)];
-      const response = await localModel(settings.chatModel, messages, controller.signal,
-        { numPredict: 580, temperature: 0.70 });
+      const response = await localModel(null, messages, controller.signal,
+        {
+          numPredict: 580, temperature: 0.70,
+          onDelta: delta => {
+            if (!controller.signal.aborted && !event.sender.isDestroyed())
+              event.sender.send('mya:chat-delta', { requestId, delta });
+          }
+        });
       const answer = cleanText(response, 4500);
       if (answer) conversation.add(question, answer);
       return answer
@@ -681,9 +719,11 @@ function registerIpc() {
           } }
         : { error: 'Local AI returned an empty reply' };
     } catch (error) {
-      return { error: 'Local AI unavailable. Install/run Ollama and the configured model. Details: ' + error.message };
+      if (controller.signal.aborted) return { canceled: true };
+      return { error: 'Mya local model unavailable: ' + error.message };
     } finally {
       clearTimeout(timeout);
+      if (activeChat === controller) activeChat = null;
       chatBusy = false;
     }
   });
@@ -698,10 +738,17 @@ function registerIpc() {
     activeTranscription?.abort();
     window?.minimize();
   });
-  ipcMain.handle('mya:quit', () => { quitting = true; stopObservation(); app.quit(); });
+  ipcMain.handle('mya:quit', () => {
+    quitting = true;
+    activeChat?.abort();
+    localEngine?.stop();
+    stopObservation();
+    app.quit();
+  });
 }
 app.whenReady().then(() => {
   if (!singleInstance) return;
+  localEngine = new MyaLocalEngine({ configPath: userFile('mya-local-engine.json') });
   configurePermissions();
   registerIpc();
   createWindow();
@@ -715,6 +762,8 @@ app.on('before-quit', () => {
   quitting = true;
   micPermissionUntil = 0;
   activeTranscription?.abort();
+  activeChat?.abort();
+  localEngine?.stop();
   stopObservation();
 });
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
