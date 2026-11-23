@@ -183,7 +183,11 @@ let animationFrame = 0;
 let lastFrameAt = 0;
 const clock = new THREE.Clock();
 const loader = new GLTFLoader();
-loader.register(parser => new VRMLoaderPlugin(parser));
+// Mya animates the original (raw) humanoid skeleton with Kawaii FBX and
+// procedural gestures. three-vrm normally copies normalized rest poses onto
+// raw bones on vrm.update(), undoing that animation and leaving an A-pose.
+// Disable that copy while retaining VRM expressions, physics and constraints.
+loader.register(parser => new VRMLoaderPlugin(parser, { autoUpdateHumanBones: false }));
 let emotionGestureTimeout = null;
 
 const speechSession = new SpeechSync({
