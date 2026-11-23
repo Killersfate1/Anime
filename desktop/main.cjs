@@ -10,7 +10,14 @@ const { compareFrames } = require('./screen-change.cjs');
 const { makeMemory, validMemories, relevantMemories } = require('./memory-store.cjs');
 const { inspectAvatar } = require('./avatar-validation.cjs');
 const { buildMyaPrompt } = require('./mya-personality.cjs');
-const { MyaLocalEngine } = require('./local-engine.cjs');
+const { LocalInferenceEngine } = require('./relay-core/local-inference-engine.cjs');
+const { MemoryRepository } = require('./relay-core/memory-repository.cjs');
+const { MemoryExtractor } = require('./relay-core/memory-extractor.cjs');
+const { MemoryRetriever } = require('./relay-core/memory-retriever.cjs');
+const { MemoryConsolidator } = require('./relay-core/memory-consolidator.cjs');
+const { ConversationManager } = require('./relay-core/conversation-manager.cjs');
+const { RelationshipStateManager } = require('./relay-core/relationship-state-manager.cjs');
+const { LocalEmbeddingProvider } = require('./relay-core/local-embedding-provider.cjs');
 const { MyaNeuralVoice } = require('./neural-voice.cjs');
 const { MyaWebResearch, explicitResearchQuery, shouldConsiderAutoresearch, cleanSearchQuery } = require('./web-research.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
@@ -52,6 +59,8 @@ const DEFAULTS = Object.freeze({
   webEnabled: false,
   webProvider: 'wikipedia',
   autoResearch: true,
+  episodicRecording: true,
+  memorySuggestions: true,
   mouthEnabled: false,
   mouthFaceBack: false,
   mouthX: 0,
@@ -87,6 +96,11 @@ let activeTranscription = null;
 let chatBusy = false;
 const conversation = new ChatContext(20);
 let localEngine = null;
+let memoryRepository = null;
+let conversationManager = null;
+let memoryRetriever = null;
+let memoryConsolidator = null;
+let embeddingProvider = null;
 let neuralVoice = null;
 let activeChat = null;
 const webResearch = new MyaWebResearch();
@@ -113,6 +127,9 @@ function configurePermissions() {
 
 function userFile(name) { return path.join(app.getPath('userData'), name); }
 function readApprovedMemories() {
+  if (memoryRepository) return memoryRepository.facts('active',500).map(f=>({
+    id:f.id, kind:f.kind, content:f.content, at:f.created_at, source:'user', importance:f.importance
+  }));
   return validMemories(safeJsonRead('memories.json', []));
 }
 function safeJsonRead(filename, fallback) {
@@ -159,6 +176,8 @@ function currentSettings() {
     webEnabled: raw.webEnabled === true,
     webProvider: raw.webProvider === 'brave' ? 'brave' : 'wikipedia',
     autoResearch: raw.autoResearch !== false,
+    episodicRecording: raw.episodicRecording !== false,
+    memorySuggestions: raw.memorySuggestions !== false,
     webKeyPresent: !!getSearchKey(),
     mouthEnabled: raw.mouthEnabled === true,
     mouthFaceBack: raw.mouthFaceBack === true,
@@ -521,49 +540,80 @@ function registerIpc() {
     if (next.quietMode) stopObservation();
     return next;
   });
+  // All durable memories now live in a private per-user SQLite database.
+  // Raw conversational facts are candidates until the user confirms them.
   ipcMain.handle('mya:memory-list', () => readApprovedMemories());
   ipcMain.handle('mya:memory-add', (_event, input) => {
     const record = makeMemory(input, crypto.randomUUID(), new Date().toISOString());
-    if (!record) return { ok: false, error: 'Enter a memory note to save' };
-    const memories = readApprovedMemories().slice(-199);
-    memories.push(record);
-    writeJsonAtomic('memories.json', memories);
-    return { ok: true, id: record.id };
+    if (!record) return {ok:false,error:'Memory note is required'};
+    return memoryRepository.saveFact({...record,source:'user'},{autoApprove:true});
   });
-  ipcMain.handle('mya:memory-update', (_event, input) => {
-    if (!input || typeof input.id !== 'string') return { ok: false };
-    const edited = makeMemory(input, input.id, new Date().toISOString());
-    if (!edited) return { ok: false, error: 'Memory text is required' };
-    const memories = readApprovedMemories();
-    const target = memories.findIndex(m => m.id === input.id);
-    if (target < 0) return { ok: false, error: 'Memory no longer exists' };
-    edited.at = memories[target].at;
-    memories[target] = edited;
-    writeJsonAtomic('memories.json', memories);
-    return { ok: true };
-  });
-  ipcMain.handle('mya:memory-delete', (_event, id) => {
-    if (typeof id !== 'string') return { ok: false };
-    const memories = readApprovedMemories();
-    const remaining = memories.filter(m => m.id !== id);
-    if (remaining.length === memories.length) return { ok: false, error: 'Memory not found' };
-    writeJsonAtomic('memories.json', remaining);
-    return { ok: true };
-  });
+  ipcMain.handle('mya:memory-update', (_event, input) =>
+    input?.id ? memoryRepository.edit(input.id,input) : {ok:false,error:'Missing memory ID'});
+  ipcMain.handle('mya:memory-delete', (_event, id) => ({
+    ok: typeof id === 'string' && memoryRepository.deleteFact(id)
+  }));
   ipcMain.handle('mya:memory-clear', () => {
-    writeJsonAtomic('memories.json', []);
-    return { ok: true };
+    memoryRepository.clearFacts();
+    return {ok:true};
+  });
+  ipcMain.handle('mya:memory-candidates', () => memoryRepository.facts('pending',100).map(f=>({
+    id:f.id,content:f.content,kind:f.kind,at:f.created_at,
+    sensitivity:f.sensitivity,conflictWith:f.conflict_with
+  })));
+  ipcMain.handle('mya:memory-approve', (_event, id) =>
+    typeof id==='string'?memoryRepository.approve(id):{ok:false});
+  ipcMain.handle('mya:memory-reject', (_event, id) => ({
+    ok:typeof id==='string' && memoryRepository.reject(id)
+  }));
+  ipcMain.handle('mya:memory-episodes', () => memoryRepository.episodes(100));
+  ipcMain.handle('mya:memory-episode-delete', (_event,id) => ({
+    ok:typeof id==='string' && memoryRepository.deleteEpisode(id)
+  }));
+  ipcMain.handle('mya:memory-conversations', () => memoryRepository.listConversations(100));
+  ipcMain.handle('mya:memory-conversation-delete', (_event,id) => ({
+    ok:typeof id==='string' && memoryRepository.eraseConversation(id)
+  }));
+  ipcMain.handle('mya:memory-relationship', () => memoryRepository.relationship());
+  ipcMain.handle('mya:memory-search', async (_event, text) =>
+    memoryRetriever.retrieve(cleanText(text,180),{limit:18}));
+  ipcMain.handle('mya:embedding-status', () => embeddingProvider.status());
+  ipcMain.handle('mya:embedding-install', async () => {
+    const state=await embeddingProvider.initialize({allowDownload:true});
+    if(state.ready) await memoryRetriever.indexPending(100);
+    return state;
+  });
+  ipcMain.handle('mya:memory-reset-all', () => {
+    // Clear all conversational history, approved and candidate facts,
+    // episodes, relationship metrics, and embedding vectors. Stop using
+    // the old in-memory conversation context too.
+    activeChat?.abort();
+    conversation.clear();
+    memoryRepository.reset();
+    for(const file of ['memories.json','memories.json.migrated']){
+      try{fs.unlinkSync(userFile(file));}catch{}
+    }
+    conversationManager.startConversation();
+    return {ok:true};
   });
   ipcMain.handle('mya:memory-export', async () => {
     const result = await dialog.showSaveDialog(window, {
-      title: 'Export your approved Mya memories',
-      defaultPath: path.join(app.getPath('documents'), 'mya-memories.json'),
-      buttonLabel: 'Export',
-      filters: [{ name: 'JSON memories', extensions: ['json'] }]
+      title:'Export Relay personal memory and conversation data',
+      defaultPath:path.join(app.getPath('documents'),'relay-personal-data.json'),
+      filters:[{name:'JSON archive',extensions:['json']}]
     });
-    if (result.canceled || !result.filePath) return { ok: false, canceled: true };
-    fs.writeFileSync(result.filePath, JSON.stringify(readApprovedMemories(), null, 2), { encoding: 'utf8', mode: 0o600 });
-    return { ok: true };
+    if(result.canceled||!result.filePath)return {ok:false,canceled:true};
+    const conversations=memoryRepository.listConversations(1000);
+    const archive={
+      exportedAt:new Date().toISOString(),
+      approvedMemories:readApprovedMemories(),
+      pendingCandidates:memoryRepository.facts('pending',500),
+      episodes:memoryRepository.episodes(300),
+      relationship:memoryRepository.relationship(),
+      conversations:conversations.map(c=>({...c,messages:memoryRepository.messages(c.id,100)}))
+    };
+    fs.writeFileSync(result.filePath,JSON.stringify(archive,null,2),{mode:0o600});
+    return {ok:true};
   });
   ipcMain.handle('mya:sources', async () => {
     const sources = await desktopCapturer.getSources({
@@ -780,12 +830,37 @@ function registerIpc() {
 }
 app.whenReady().then(() => {
   if (!singleInstance) return;
-  localEngine = new MyaLocalEngine({
+  localEngine = new LocalInferenceEngine({
     configPath: userFile('mya-local-engine.json'),
     runtimeDir: app.isPackaged
       ? path.join(process.resourcesPath, 'runtime')
       : path.join(__dirname, 'runtime')
   });
+  memoryRepository = new MemoryRepository(userFile('relay-memory.sqlite'));
+  // One-time migration of the existing explicitly approved JSON notes.
+  // Keep a recoverable legacy copy until the SQLite transaction succeeds.
+  if(memoryRepository.meta('legacy_memory_import_v1')!=='done'){
+    const old = validMemories(safeJsonRead('memories.json',[]));
+    for(const item of old) memoryRepository.saveFact({...item,source:'user'},{autoApprove:true});
+    memoryRepository.setMeta('legacy_memory_import_v1','done');
+  }
+  embeddingProvider = new LocalEmbeddingProvider({dataDir:userFile('embeddings')});
+  memoryRetriever = new MemoryRetriever(memoryRepository,{embedder:embeddingProvider});
+  const extractor = new MemoryExtractor();
+  const relationship = new RelationshipStateManager(memoryRepository);
+  memoryConsolidator = new MemoryConsolidator(memoryRepository,{
+    inference:{generate:(messages,options)=>localEngine.generate(messages,options)},
+    extractor,everyTurns:6
+  });
+  conversationManager = new ConversationManager({
+    repository:memoryRepository,retriever:memoryRetriever,extractor,
+    relationship,consolidator:memoryConsolidator,inference:localEngine
+  });
+  if(embeddingProvider.installed()) {
+    embeddingProvider.initialize({allowDownload:false})
+      .then(result=>{if(result.ready)return memoryRetriever.indexPending(40);})
+      .catch(error=>console.warn('Offline embedding initialization:',error.message));
+  }
   neuralVoice = new MyaNeuralVoice({ dataDir:userFile('voice') });
   if (neuralVoice.installed()) {
     // Already-approved cached voice loads offline. No silent first-run download.
@@ -814,6 +889,8 @@ app.on('before-quit', () => {
   activeChat?.abort();
   localEngine?.stop();
   neuralVoice?.stop();
+  embeddingProvider?.close();
+  memoryRepository?.close();
   stopObservation();
 });
 app.on('window-all-closed', () => { if (!quitting) app.quit(); });
