@@ -420,7 +420,14 @@ function registerIpc() {
   });
   ipcMain.handle('mya:voice-cancel', () => {
     activeTranscription?.abort();
-    localListening?.cancel();
+    if(localListening) {
+      // Interrupt any in-flight Whisper decode, then reload the cached model
+      // privately so the next push-to-talk works without another install.
+      localListening.cancel();
+      if(!quitting && localListening.installed())
+        localListening.init({allowDownload:false}).catch(error=>
+          console.warn('Local listening recovery:',error.message));
+    }
     micPermissionUntil = 0;
     return { ok: true };
   });
