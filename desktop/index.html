@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none';">
 <title>Mya — Relay AI Kawaii</title>
-<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/","@pixiv/three-vrm":"./node_modules/@pixiv/three-vrm/lib/three-vrm.module.js"}}</script>
 <link rel="stylesheet" href="./ui.css">
 </head>
 <body>
@@ -23,8 +23,8 @@
     <div class="avatar-empty" id="avatar-empty">
       <span class="avatar-symbol">♡</span>
       <p>Meet Mya</p>
-      <small>Import your original GLB — no substitute character.</small>
-      <button class="primary" id="import-model">Import Mya's GLB</button>
+      <small>Import your GLB or VRM — no substitute character.</small>
+      <button class="primary" id="import-model">Import GLB / VRM</button>
     </div>
     <div class="avatar-hud"><span id="avatar-status">No character loaded</span><button id="avatar-recenter" title="Recenter model">⤾</button></div>
   </div>
@@ -62,12 +62,12 @@
       <label class="check"><input id="voice-enabled" type="checkbox" checked> Speak responses using system voice</label>
       <label class="check"><input id="economy-mode" type="checkbox"> Economy mode (30 second samples)</label>
       <label class="check"><input id="quiet-mode" type="checkbox"> Quiet mode (also stops screen monitoring)</label>
-      <div class="controls"><button id="save-settings" class="primary">Save settings</button><button id="change-avatar">Change GLB</button></div>
+      <div class="controls"><button id="save-settings" class="primary">Save settings</button><button id="change-avatar">Change avatar</button></div>
       <div class="face-tools">
         <strong>Face &amp; speech calibration</strong>
-        <p class="hint" id="face-diagnostics">Import Mya's GLB to inspect facial controls.</p>
+        <p class="hint" id="face-diagnostics">Import GLB / VRM to inspect facial controls.</p>
         <label class="check"><input type="checkbox" id="mouth-enabled"> Enable optional calibrated mouth overlay (experimental)</label>
-        <p class="hint">Your GLB has no facial morphs or jaw. The overlay does not change her model; position it manually before using it. Mouth motion follows speech word boundaries approximately, not exact phonemes.</p>
+        <p class="hint">VRM facial expression presets are used when available. For GLB files without mouth controls, an optional overlay can be calibrated manually. Speech timing is approximate.</p>
         <div class="face-sliders">
           <label>X <input type="range" id="mouth-x" min="-0.35" max="0.35" step="0.005"></label>
           <label>Y <input type="range" id="mouth-y" min="-0.4" max="0.25" step="0.005"></label>
