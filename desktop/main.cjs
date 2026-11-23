@@ -327,15 +327,6 @@ function registerIpc() {
       accurateLipSyncVerified: false
     };
   });
-  ipcMain.handle('mya:engine-resource', async (_event, kind) => {
-    const allowed = {
-      releases: 'https://github.com/ggml-org/llama.cpp/releases',
-      models: 'https://huggingface.co/models?library=gguf'
-    };
-    if (!Object.hasOwn(allowed, kind)) return { ok:false };
-    try { await shell.openExternal(allowed[kind]); return { ok:true }; }
-    catch { return { ok:false }; }
-  });
   ipcMain.handle('mya:voice-status', () => neuralVoice.status());
   ipcMain.handle('mya:voice-install', async event => {
     if (!window || event.sender.id !== window.webContents.id)
@@ -366,37 +357,6 @@ function registerIpc() {
     return { ok:true };
   });
   ipcMain.handle('mya:engine-status', () => localEngine.status());
-  ipcMain.handle('mya:engine-choose', async (_event, kind) => {
-    if (!['engine','model','projector'].includes(kind)) return { error: 'Invalid file type' };
-    const filters = kind === 'engine'
-      ? [{ name: 'llama.cpp engine', extensions: ['exe'] }]
-      : [{ name: 'GGUF model files', extensions: ['gguf'] }];
-    const result = await dialog.showOpenDialog(window, {
-      title: kind === 'engine' ? 'Choose official llama-server.exe' :
-        kind === 'model' ? 'Choose GGUF language model' : 'Choose optional multimodal projector GGUF',
-      properties: ['openFile'], filters
-    });
-    if (result.canceled || result.filePaths.length !== 1) return localEngine.status();
-    try { return localEngine.setFile(kind, result.filePaths[0]); }
-    catch(error) { return { error: error.message, ...localEngine.status() }; }
-  });
-  ipcMain.handle('mya:engine-clear-projector', () => {
-    try { return localEngine.clearProjector(); }
-    catch(error) { return { ...localEngine.status(), error: error.message }; }
-  });
-  ipcMain.handle('mya:engine-options', (_event, options) => {
-    try { return localEngine.configureOptions(options); }
-    catch(error) { return { ...localEngine.status(), error: error.message }; }
-  });
-  ipcMain.handle('mya:engine-start', async () => {
-    try { return await localEngine.start(); }
-    catch(error) { return { ...localEngine.status(), error: error.message }; }
-  });
-  ipcMain.handle('mya:engine-stop', () => {
-    activeChat?.abort();
-    activeAnalysis?.abort();
-    return localEngine.stop();
-  });
   ipcMain.handle('mya:animation-list', () =>
     Object.keys(kawaiiClips).filter(name => {
       const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', kawaiiClips[name].file);
