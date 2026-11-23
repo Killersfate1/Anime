@@ -2,6 +2,28 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Mya's neural anime voice (Kokoro, on-device)
+
+Mya has an integrated **Kokoro 82M neural speech engine** in the Electron application. This is different from Windows' basic system voice: Kokoro generates expressive, natural-sounding speech **on this computer** with a light model, not using a cloud voice API or an independent speech server. A Node worker keeps speech synthesis off the 3D rendering thread.
+
+In **Settings → Mya's beautiful voice**, click **Install neural voice** once to explicitly approve downloading the Kokoro q8 model assets from Hugging Face to your local user-data cache. After successful setup, the installed model is loaded automatically and does **not** require network access to speak. Choose **Heart** (warm, sweet) or **Bella** (bright, expressive); Nicole, Sarah, Kore, Sky, Emma and Lily are also available. Click **Hear Mya's voice** to test her. Windows system speech is available as a backup.
+
+Mya speaks answers in sentence-sized chunks without recording or saving generated WAV files. Her mouth opening follows the generated waveform amplitude, an improvement over arbitrary mouth cycles; **this is not phoneme-accurate lip-sync**. Interrupting Mya stops active playback and discards pending speech. English voices are currently the best-supported; these are distinct licensed synthetic presets, not voice clones of real people.
+
+The implementation is open-source code with an externally obtained model checkpoint. **Kokoro weights are Apache-2.0**; the application does not claim to own or train those weights. The app requires `kokoro-js` and Transformers.js dependencies, installed by `npm install`. Exact voice quality and model loading need Windows device verification.
+
+### Building a single-launch Windows Mya app
+
+The desktop application can launch its **own local AI brain automatically** if a compatible engine and instruction-tuned GGUF are bundled. The Windows installer build intentionally refuses to run without a valid bundled model.
+
+1. Download the official Windows `llama-server.exe` build and copy the EXE **and its required DLLs** into `desktop/runtime/`.
+2. Copy **one** properly licensed, compatible instruction-tuned GGUF to `desktop/runtime/models/`. Carefully review the model license before distributing an installer.
+3. On Windows, run `cd desktop` (only if not already there), `npm install`, then `npm run build:windows`.
+4. Electron Builder stages the runtime as a separate app resource; when Mya launches she detects the bundled GGUF and starts the inference process herself. No separate user-launched server or Ollama window.
+5. Kokoro voice assets still require the user's first explicit installation unless packaged separately under an appropriate license. Once installed, they are cached for offline use.
+
+**Release status:** This is a packaging path, not a finished downloadable installer. No real GGUF server, installed neural voice, audio output, or Windows end-to-end workflow has been verified during this development session. Bundled models significantly increase installer size and RAM use; choose weights appropriate for target PCs.
+
 ## Mya Local AI — first-party desktop inference
 
 **Ollama is no longer required or used by this application.** The Electron app now owns its local inference process through the open-source llama.cpp `llama-server` engine, with a user-approved GGUF model. Mya's personality, memory, streaming conversations, UI, private model selection, and controlled internet-research logic are part of this repo. The model weights and runtime executable are *not* committed or bundled; compatible open model weights are trained by their respective creators, not by Mya.
