@@ -6,10 +6,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 
 const HOST = '127.0.0.1';
 const PORT = 18931;
-const ROOT_URL = 'http://' + HOST + ':' + PORT;
 const READY_TIMEOUT_MS = 120000;
 const MAX_REPLY = 12000;
 
@@ -111,11 +111,28 @@ class MyaLocalEngine {
     this.lastError = '';
     this.starting = null;
     this.stderrTail = '';
+    this.apiKey = '';
     this.config = this.loadConfig();
   }
   loadConfig() {
-    try { return normalizeConfig(JSON.parse(fs.readFileSync(this.configPath, 'utf8'))); }
-    catch { return normalizeConfig({}); }
+    let saved = {};
+    try { saved = JSON.parse(fs.readFileSync(this.configPath, 'utf8')); }
+    catch {}
+    const config = normalizeConfig(saved);
+    // Optional portable offline layout: users can place the official engine
+    // and their own GGUF in desktop/runtime instead of browsing for them.
+    const folder = path.join(__dirname, 'runtime');
+    const engineCandidate = path.join(folder,
+      process.platform === 'win32' ? 'llama-server.exe' : 'llama-server');
+    if (!config.enginePath && isLlamaServer(engineCandidate)) config.enginePath = engineCandidate;
+    if (!config.modelPath) {
+      const dir = path.join(folder, 'models');
+      try {
+        const models = fs.readdirSync(dir).filter(file => isGGUF(path.join(dir, file)));
+        if (models.length === 1) config.modelPath = path.join(dir, models[0]);
+      } catch {}
+    }
+    return config;
   }
   setFile(kind, filename) {
     const keys = { engine:'enginePath', model:'modelPath', projector:'projectorPath' };
@@ -189,15 +206,17 @@ class MyaLocalEngine {
       throw new Error('Selected vision projector is not a valid GGUF file.');
     this.state = 'starting';
     this.lastError = '';
+    this.apiKey = crypto.randomBytes(28).toString('hex');
     this.starting = (async () => {
       const portBusy = await this._health(500);
       if (portBusy) throw new Error('Inference port ' + this.port + ' is occupied by another server. Close it first.');
       const args = ['--model', modelPath, '--host', HOST, '--port', String(this.port),
-        '--ctx-size', String(contextSize), '--n-gpu-layers', String(gpuLayers)];
+        '--ctx-size', String(contextSize), '--n-gpu-layers', String(gpuLayers),
+        '--alias', 'mya', '--no-webui'];
       if (projectorPath) args.push('--mmproj', projectorPath);
       const child = this.spawnImpl(enginePath, args, {
         cwd: path.dirname(enginePath), windowsHide: true, stdio: ['ignore','pipe','pipe'],
-        shell: false
+        shell: false, env: { ...process.env, LLAMA_API_KEY: this.apiKey }
       });
       this.child = child;
       this.stderrTail = '';
@@ -242,6 +261,7 @@ class MyaLocalEngine {
   }
   stop() {
     this.state = 'stopped';
+    this.apiKey = '';
     if (this.child) {
       const child = this.child;
       this.child = null;
@@ -253,14 +273,17 @@ class MyaLocalEngine {
     if (this.state !== 'ready' || !this.child)
       throw new Error('Mya AI is not running. Choose a llama-server executable and GGUF in Settings, then Start Mya AI.');
     const request = {
-      model: path.basename(this.config.modelPath),
+      model: 'mya',
       messages: toChatMessages(messages, !!this.config.projectorPath),
       temperature: Math.min(1.5, Math.max(0, Number(temperature) || 0.7)),
       max_tokens: Math.min(1400, Math.max(40, Number(numPredict) || 350)),
       stream: !!onDelta
     };
     const response = await this.fetchImpl(this.baseUrl + '/v1/chat/completions', {
-      method: 'POST', headers: { 'Content-Type':'application/json' },
+      method: 'POST', headers: {
+        'Content-Type':'application/json',
+        Authorization: 'Bearer ' + this.apiKey
+      },
       body: JSON.stringify(request), signal, redirect: 'error'
     });
     if (!response.ok) {
