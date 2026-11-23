@@ -64,7 +64,8 @@
       <div class="ai-controls" id="mya-local-ai">
         <strong>Mya Local AI Engine</strong>
         <p class="hint">Mya runs her own GGUF model with llama.cpp directly on your PC. No Ollama, cloud API, login, or subscription. Choose the local engine and model once, then start Mya AI.</p>
-        <p class="hint">Step 1 — choose `llama-server.exe` from an official llama.cpp Windows release.</p>
+        <p class="hint">Step 1 — choose llama-server.exe from an official llama.cpp Windows release.</p>
+        <div class="controls"><button id="get-engine-link">Official llama.cpp downloads</button><button id="get-model-link">Find GGUF models</button></div>
         <div class="controls"><button id="choose-engine">Choose AI engine</button><span id="engine-file" class="hint">None selected</span></div>
         <p class="hint">Step 2 — choose a compatible, instruction-tuned `.gguf` model you've downloaded. Models are not bundled and retain their own licenses.</p>
         <div class="controls"><button id="choose-gguf">Choose GGUF model</button><span id="gguf-file" class="hint">None selected</span></div>
