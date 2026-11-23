@@ -15,11 +15,21 @@ class ChatContext {
     this.turns.push({ role: 'assistant', content: assistant });
     this.turns = this.turns.slice(-this.maxTurns * 2);
   }
-  messages(nextQuestion) {
+  messages(nextQuestion, charBudget = 9500) {
     const next = String(nextQuestion || '').trim().slice(0, 2000);
     if (!next) throw new Error('Question must be nonempty');
-    // Copy so the caller cannot mutate session history.
-    return [...this.turns.map(entry => ({ ...entry })), { role: 'user', content: next }];
+    // GGUF contexts are finite: keep complete recent user/assistant pairs
+    // rather than overflowing the inference context with old messages.
+    let available = Math.max(0, Math.min(20000, Number(charBudget) || 9500) - next.length);
+    const selected = [];
+    for (let i = this.turns.length - 2; i >= 0; i -= 2) {
+      const pair = [this.turns[i], this.turns[i + 1]];
+      const used = pair[0].content.length + pair[1].content.length;
+      if (used > available) break;
+      available -= used;
+      selected.unshift(...pair.map(item => ({ ...item })));
+    }
+    return [...selected, { role: 'user', content: next }];
   }
   clear() { this.turns = []; }
   count() { return this.turns.length / 2; }
