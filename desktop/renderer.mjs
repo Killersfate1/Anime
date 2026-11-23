@@ -66,6 +66,14 @@ let vrmBaseYaw = 0;
 let kawaii = null;
 let procedural = null;
 let preferProcedural = false;
+function reportMotionStatus() {
+  const fallback = procedural?.status;
+  ui('animation-diagnostics').textContent =
+    'Kawaii: ' + (kawaii?.ready ? 'loaded' : 'not ready') +
+    ' · Backup motion: ' + (fallback?.animated ? 'available' : 'no compatible bones') +
+    ' · Active: ' + (preferProcedural || !kawaii?.ready ? 'backup' : 'Kawaii') +
+    (kawaii?.failed?.length ? ' · Retarget warnings: ' + kawaii.failed.slice(-2).join(' / ') : '');
+}
 function playMyaGesture(name) {
   if (!preferProcedural && kawaii?.ready && kawaii.play(name)) return true;
   return procedural?.play(name) || false;
@@ -227,12 +235,14 @@ function applyAvatar(gltf) {
     : head ? 'Mya · GLB · Kawaii loading…' : 'Mya · GLB loaded (rig check required)';
   procedural = new MyaProceduralMotion(character, activeVRM);
   kawaii = new MyaKawaiiAnimation(character, activeVRM);
+  reportMotionStatus();
   nextIdleMoment = performance.now() + 12000;
   const loadingController = kawaii;
   kawaii.loadAll(api, text => {
     if (kawaii === loadingController) ui('avatar-status').textContent = text;
   }).then(ok => {
     if (kawaii !== loadingController) return;
+    reportMotionStatus();
     if (!ok) {
       ui('avatar-status').textContent = 'Fallback movement active; Kawaii retarget needs calibration';
       toast('Mya is using basic fallback movement. Kawaii FBX retarget still needs fixing.');
@@ -268,7 +278,7 @@ async function loadModel() {
       }
       applyAvatar(gltf);
     }, error => toast('Character load failed: ' + error.message));
-  } catch (error) { toast('GLB read failed: ' + error.message); }
+  } catch (error) { toast('Avatar read failed: ' + error.message); }
 }
 function frame(t) {
   animationFrame = requestAnimationFrame(frame);
@@ -313,19 +323,55 @@ function say(text) {
     playMyaGesture('Idle');
   }
 }
+function showResearch(result) {
+  const holder = ui('research-output');
+  holder.replaceChildren();
+  holder.classList.add('hidden');
+  if (!result) return;
+  if (!result.searched) {
+    if (result.reason) {
+      const info = document.createElement('p');
+      info.textContent = 'Search was not completed: ' + result.reason;
+      holder.append(info);
+      holder.classList.remove('hidden');
+    }
+    return;
+  }
+  const title = document.createElement('strong');
+  title.textContent = 'Mya searched ' + result.provider + ': ' + result.query;
+  holder.append(title);
+  for (const [index, source] of (result.sources || []).entries()) {
+    const item = document.createElement('button');
+    item.className = 'research-source';
+    item.textContent = '[' + (index + 1) + '] ' + source.title;
+    item.title = source.url;
+    item.addEventListener('click', async () => {
+      const opened = await api.openResearchSource(source.url);
+      if (!opened?.ok) toast('Could not open this source');
+    });
+    holder.append(item);
+  }
+  if (!result.sources?.length) {
+    const none = document.createElement('p');
+    none.textContent = 'No reliable results returned from this search provider.';
+    holder.append(none);
+  }
+  holder.classList.remove('hidden');
+}
 async function sendMessage() {
   const input = ui('chat-input');
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
   message(text, 'user');
-  ui('state').textContent = 'Thinking';
+  showResearch(null);
+  ui('state').textContent = currentSettings.webEnabled ? 'Thinking · search allowed' : 'Thinking';
   playMyaGesture('Think');
   ui('send').disabled = true;
   try {
     const result = await api.askLocalAI(text);
     if (result.error) { toast(result.error); message(result.error); }
-    else { message(result.text); say(result.text); }
+    else { message(result.text); showResearch(result.research); say(result.text); }
   } catch (error) { toast(error.message); }
   finally { ui('send').disabled = false; if (!speaking) ui('state').textContent = 'Ready'; }
 }
@@ -410,6 +456,14 @@ async function loadSettings() {
   ui('voice-enabled').checked = currentSettings.voiceEnabled;
   ui('economy-mode').checked = currentSettings.economyMode;
   ui('quiet-mode').checked = currentSettings.quietMode;
+  ui('personality-mode').value = currentSettings.personalityMode || 'girlfriend';
+  ui('affection').value = currentSettings.affection ?? 0.78;
+  ui('web-enabled').checked = !!currentSettings.webEnabled;
+  ui('auto-research').checked = currentSettings.autoResearch !== false;
+  ui('web-provider').value = currentSettings.webProvider || 'wikipedia';
+  ui('web-key-status').textContent = currentSettings.webKeyPresent ? 'API key saved locally' : 'No key saved';
+  ui('force-procedural').checked = preferProcedural;
+  reportMotionStatus();
   for (const [field, key] of [
     ['mouth-x', 'mouthX'], ['mouth-y', 'mouthY'], ['mouth-z', 'mouthZ'],
     ['mouth-width', 'mouthWidth'], ['mouth-height', 'mouthHeight']
@@ -428,6 +482,12 @@ async function saveSettings() {
       voiceEnabled: ui('voice-enabled').checked,
       economyMode: ui('economy-mode').checked,
       quietMode: ui('quiet-mode').checked,
+      personalityMode: ui('personality-mode').value,
+      affection: Number(ui('affection').value),
+      webEnabled: ui('web-enabled').checked,
+      webProvider: ui('web-provider').value,
+      autoResearch: ui('auto-research').checked,
+      webApiKey: ui('web-api-key').value.trim(),
       mouthEnabled: ui('mouth-enabled').checked,
       mouthFaceBack: ui('mouth-face-back').checked,
       mouthX: Number(ui('mouth-x').value),
@@ -437,6 +497,7 @@ async function saveSettings() {
       mouthHeight: Number(ui('mouth-height').value)
     });
     if (currentSettings.quietMode) setWatching(false);
+    ui('web-api-key').value = '';
     await loadSettings();
     toast('Settings saved.');
   } catch (error) { toast('Settings error: ' + error.message); }
@@ -519,6 +580,20 @@ ui('refresh-sources').addEventListener('click', refreshSources);
 ui('start-watch').addEventListener('click', startWatching);
 ui('stop-watch').addEventListener('click', stopWatching);
 ui('save-settings').addEventListener('click', saveSettings);
+ui('clear-web-key').addEventListener('click', async () => {
+  await api.updateSettings({clearWebKey: true});
+  ui('web-api-key').value = '';
+  await loadSettings();
+  toast('Saved search key cleared');
+});
+ui('force-procedural').addEventListener('change', () => {
+  preferProcedural = ui('force-procedural').checked;
+  if (preferProcedural) {
+    kawaii?.mixer?.stopAllAction();
+    procedural?.play('Idle');
+  } else playMyaGesture('Idle');
+  reportMotionStatus();
+});
 function previewMouthSettings() {
   face?.setFallback({
     enabled: ui('mouth-enabled').checked,
