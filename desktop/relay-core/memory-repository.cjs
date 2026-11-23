@@ -25,7 +25,9 @@ function toBlob(vec){
 }
 function fromBlob(b){
   if(!b||b.length%4)return null;
-  const a=[];for(let i=0;i<b.length;i+=4)a.push(b.readFloatLE(i));return a;
+  // node:sqlite returns Uint8Array, not necessarily a Node Buffer.
+  const bytes=Buffer.from(b.buffer,b.byteOffset,b.byteLength);
+  const a=[];for(let i=0;i<bytes.length;i+=4)a.push(bytes.readFloatLE(i));return a;
 }
 class MemoryRepository {
   constructor(filename=':memory:') {
