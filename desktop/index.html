@@ -86,20 +86,22 @@
         <p id="engine-status" class="hint" aria-live="polite">Mya AI is not running.</p>
         <p class="hint">Model loading can take some time depending on RAM, VRAM and the GGUF size. Mya's chat and approved memories stay on this computer; optional internet research is controlled separately below.</p>
       </div>
-      <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.45"></label>
+      <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.90"></label>
       <div class="ai-controls">
         <strong>Mya's personality</strong>
         <label>Companion mode
           <select id="personality-mode">
-            <option value="girlfriend">Affectionate anime girlfriend</option>
+            <option value="girlfriend">Bold, flirty anime girlfriend</option>
             <option value="best_friend">Playful anime best friend</option>
             <option value="gaming_partner">Gaming partner</option>
             <option value="productivity">Work and productivity</option>
             <option value="friendly">Friendly companion</option>
           </select>
         </label>
-        <label>Affection <input id="affection" type="range" min="0" max="1" step="0.05" value="0.78"></label>
-        <p class="hint">Mya uses your selected GGUF model on this computer for conversation. You choose how affectionate and talkative she is.</p>
+        <label>Affection <input id="affection" type="range" min="0" max="1" step="0.05" value="0.95"></label>
+        <label>Flirtation <input id="flirtation" type="range" min="0" max="1" step="0.05" value="0.95"></label>
+        <label class="check"><input type="checkbox" id="mature-banter" checked> Mature banter: bolder teasing, suggestive innuendo and adult language</label>
+        <p class="hint">Mya defaults to confident, romantic and extremely chatty. She stays useful for gaming and work instead of flirting through every serious answer. Mature banter is suggestive, not graphic.</p>
       </div>
       <div class="ai-controls">
         <strong>Internet research</strong>
