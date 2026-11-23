@@ -35,9 +35,13 @@
     </div>
     <section id="tab-chat" class="tab-content">
       <div class="conversation" id="conversation" aria-live="polite">
-        <p class="mya-message">Hi! I'm Mya. Import my GLB to see me, or connect Ollama for a real local conversation. ♡</p>
+        <p class="mya-message">Hi! I'm Mya. Choose my local GGUF brain in Settings, start Mya AI, and let's talk! ♡</p>
       </div>
-      <div class="chat-actions"><button id="clear-chat" title="Clear this session's conversation context">Clear session</button></div>
+      <div class="chat-actions">
+        <span id="local-ai-status" class="hint">Mya AI: not started</span>
+        <button id="stop-answer" disabled title="Interrupt the current local AI response">Stop response</button>
+        <button id="clear-chat" title="Clear this session's conversation context">Clear session</button>
+      </div>
       <div class="composer">
         <input id="chat-input" maxlength="2000" placeholder="Talk to Mya…" aria-label="Message Mya">
         <button id="mic-toggle" type="button" aria-pressed="false" title="Start push-to-talk microphone recording">🎙</button>
@@ -57,8 +61,30 @@
       </div>
     </section>
     <section id="tab-settings" class="tab-content hidden">
-      <label>Conversation model <input id="chat-model" value="gemma3:4b"></label>
-      <label>Vision model <input id="vision-model" value="gemma3:4b"></label>
+      <div class="ai-controls" id="mya-local-ai">
+        <strong>Mya Local AI Engine</strong>
+        <p class="hint">Mya runs her own GGUF model with llama.cpp directly on your PC. No Ollama, cloud API, login, or subscription. Choose the local engine and model once, then start Mya AI.</p>
+        <p class="hint">Step 1 — choose `llama-server.exe` from an official llama.cpp Windows release.</p>
+        <div class="controls"><button id="choose-engine">Choose AI engine</button><span id="engine-file" class="hint">None selected</span></div>
+        <p class="hint">Step 2 — choose a compatible, instruction-tuned `.gguf` model you've downloaded. Models are not bundled and retain their own licenses.</p>
+        <div class="controls"><button id="choose-gguf">Choose GGUF model</button><span id="gguf-file" class="hint">None selected</span></div>
+        <div class="controls"><button id="choose-projector">Optional vision projector</button><button id="clear-projector">Clear projector</button></div>
+        <p class="hint" id="projector-file">No multimodal projector selected. Text conversation does not need one.</p>
+        <label>GPU acceleration layers (0 = CPU, safer startup)
+          <input id="engine-gpu-layers" type="number" min="0" max="99" step="1" value="0">
+        </label>
+        <label>Conversation context (tokens)
+          <select id="engine-context">
+            <option value="2048">2,048</option>
+            <option value="4096" selected>4,096</option>
+            <option value="8192">8,192</option>
+            <option value="16384">16,384</option>
+          </select>
+        </label>
+        <div class="controls"><button id="engine-start" class="primary">Start Mya AI</button><button id="engine-stop">Stop AI</button></div>
+        <p id="engine-status" class="hint" aria-live="polite">Mya AI is not running.</p>
+        <p class="hint">Model loading can take some time depending on RAM, VRAM and the GGUF size. Mya's chat and approved memories stay on this computer; optional internet research is controlled separately below.</p>
+      </div>
       <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.45"></label>
       <div class="ai-controls">
         <strong>Mya's personality</strong>
