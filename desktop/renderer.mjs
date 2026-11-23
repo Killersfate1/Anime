@@ -760,6 +760,14 @@ async function chooseLocalFile(kind) {
     if (info.error) toast(info.error);
   } catch (error) { toast('File selection failed: ' + error.message); }
 }
+ui('get-engine-link').addEventListener('click', async () => {
+  const result = await api.openEngineResource('releases');
+  if (!result.ok) toast('Could not open official llama.cpp releases');
+});
+ui('get-model-link').addEventListener('click', async () => {
+  const result = await api.openEngineResource('models');
+  if (!result.ok) toast('Could not open GGUF model directory');
+});
 ui('choose-engine').addEventListener('click', () => chooseLocalFile('engine'));
 ui('choose-gguf').addEventListener('click', () => chooseLocalFile('model'));
 ui('choose-projector').addEventListener('click', () => chooseLocalFile('projector'));
