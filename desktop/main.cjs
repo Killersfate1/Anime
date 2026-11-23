@@ -11,6 +11,7 @@ const { makeMemory, validMemories, relevantMemories } = require('./memory-store.
 const { inspectAvatar } = require('./avatar-validation.cjs');
 const { buildMyaPrompt } = require('./mya-personality.cjs');
 const { LocalInferenceEngine } = require('./relay-core/local-inference-engine.cjs');
+const { MyaBrainInstaller } = require('./brain-installer.cjs');
 const { MemoryRepository } = require('./relay-core/memory-repository.cjs');
 const { MemoryExtractor } = require('./relay-core/memory-extractor.cjs');
 const { MemoryRetriever } = require('./relay-core/memory-retriever.cjs');
@@ -96,6 +97,7 @@ let activeTranscription = null;
 let chatBusy = false;
 const conversation = new ChatContext(20);
 let localEngine = null;
+let brainInstaller = null;
 let memoryRepository = null;
 let conversationManager = null;
 let memoryRetriever = null;
@@ -338,6 +340,7 @@ function registerIpc() {
       kawaiiClips: available,
       kawaiiExpected: Object.keys(kawaiiClips).length,
       localAI: localEngine?.status() || { state:'stopped', ready:false },
+      brainInstall: brainInstaller?.status() || { stage:'idle',busy:false },
       neuralVoice: neuralVoice?.status() || { state:'off', ready:false },
       whisper,
       screenMonitoringEnabled: observationEnabled,
@@ -374,6 +377,18 @@ function registerIpc() {
   ipcMain.handle('mya:voice-stop-speech', () => {
     neuralVoice?.cancelSpeech();
     return { ok:true };
+  });
+  ipcMain.handle('mya:brain-install-status', () =>
+    brainInstaller?.status() || {stage:'idle',busy:false});
+  ipcMain.handle('mya:brain-install', async event => {
+    if(!window || event.sender.id!==window.webContents.id)
+      return {ok:false,error:'Unauthorized local model installation request'};
+    return brainInstaller.install();
+  });
+  ipcMain.handle('mya:brain-install-cancel', event => {
+    if(!window || event.sender.id!==window.webContents.id)return {ok:false};
+    brainInstaller.stop();
+    return {ok:true};
   });
   ipcMain.handle('mya:engine-status', () => localEngine.status());
   ipcMain.handle('mya:animation-list', () =>
@@ -856,6 +871,7 @@ function registerIpc() {
   ipcMain.handle('mya:quit', () => {
     quitting = true;
     activeChat?.abort();
+    brainInstaller?.stop();
     localEngine?.stop();
     neuralVoice?.stop();
     stopObservation();
@@ -869,6 +885,14 @@ app.whenReady().then(() => {
     runtimeDir: app.isPackaged
       ? path.join(process.resourcesPath, 'runtime')
       : path.join(__dirname, 'runtime')
+  });
+  brainInstaller = new MyaBrainInstaller({
+    dataDir:userFile('brain'),
+    engine:localEngine,
+    onProgress:progress=>{
+      if(window && !window.isDestroyed() && !window.webContents.isDestroyed())
+        window.webContents.send('mya:brain-install-progress',progress);
+    }
   });
   memoryRepository = new MemoryRepository(userFile('relay-memory.sqlite'));
   // One-time migration of the existing explicitly approved JSON notes.
@@ -929,6 +953,7 @@ app.on('before-quit', () => {
   micPermissionUntil = 0;
   activeTranscription?.abort();
   activeChat?.abort();
+  brainInstaller?.stop();
   localEngine?.stop();
   neuralVoice?.stop();
   embeddingProvider?.close();
