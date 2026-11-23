@@ -54,7 +54,7 @@
     <section id="tab-screen" class="tab-content hidden">
       <div class="control-group">
         <div class="control-title">Screen awareness <span id="watch-indicator" class="off">OFF</span></div>
-        <p class="hint">Only the source you choose. Analysis runs locally in Ollama. No screenshots are saved.</p>
+        <p class="hint">Only the source you choose. Analysis uses Mya's locally running GGUF model when compatible vision support is configured. No screenshots are saved.</p>
         <select id="source-picker"><option value="">Choose a window or display</option></select>
         <div class="controls"><button id="refresh-sources">Find windows</button><button id="start-watch" class="primary">Start watching</button><button id="stop-watch" disabled>Stop</button></div>
         <div class="observation" id="observation">Screen observation is disabled.</div>
@@ -99,7 +99,7 @@
           </select>
         </label>
         <label>Affection <input id="affection" type="range" min="0" max="1" step="0.05" value="0.78"></label>
-        <p class="hint">Mya uses the local Ollama model for conversation. You choose how affectionate and talkative she is.</p>
+        <p class="hint">Mya uses your selected GGUF model on this computer for conversation. You choose how affectionate and talkative she is.</p>
       </div>
       <div class="ai-controls">
         <strong>Internet research</strong>
