@@ -84,8 +84,8 @@ class MemoryRepository {
       this.db.prepare('UPDATE conversations SET updated_at=? WHERE id=?').run(t,conversationId);
     });
   }
-  messages(id,limit=40){return this.db.prepare('SELECT id,role,content,created_at FROM messages WHERE conversation_id=? ORDER BY sequence DESC LIMIT ?').all(id,Math.min(100,Math.max(1,limit))).reverse();}
-  listConversations(limit=30){return this.db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?').all(Math.min(100,limit));}
+  messages(id,limit=40){return this.db.prepare('SELECT id,role,content,created_at FROM messages WHERE conversation_id=? ORDER BY sequence DESC LIMIT ?').all(id,Math.min(50000,Math.max(1,limit))).reverse();}
+  listConversations(limit=30){return this.db.prepare('SELECT * FROM conversations ORDER BY updated_at DESC LIMIT ?').all(Math.min(10000,Math.max(1,limit)));}
   eraseConversation(id){return this.db.prepare('DELETE FROM conversations WHERE id=?').run(id).changes>0;}
   saveFact(d={},options={}){
     const content=clean(d.content,500);if(!content)return {ok:false,error:'Memory text is required'};
@@ -115,7 +115,7 @@ class MemoryRepository {
   reject(id){return this.db.prepare(`UPDATE facts SET status='rejected',updated_at=? WHERE id=? AND status='pending'`).run(now(),id).changes>0;}
   facts(status='active',limit=200){
     if(!['active','pending','superseded','rejected'].includes(status))throw Error('Invalid memory state');
-    return this.db.prepare('SELECT * FROM facts WHERE status=? ORDER BY updated_at DESC LIMIT ?').all(status,Math.min(500,Math.max(1,limit)));
+    return this.db.prepare('SELECT * FROM facts WHERE status=? ORDER BY updated_at DESC LIMIT ?').all(status,Math.min(10000,Math.max(1,limit)));
   }
   fact(id){return this.db.prepare('SELECT * FROM facts WHERE id=?').get(id)||null;}
   edit(id,data){
@@ -135,7 +135,7 @@ class MemoryRepository {
         summary,clean(d.eventAt,40)||t,clamp(d.importance??0.5),clean(d.source,30)||'conversation',t);
     return {id,summary};
   }
-  episodes(limit=50){return this.db.prepare('SELECT * FROM episodes ORDER BY event_at DESC LIMIT ?').all(Math.min(300,limit));}
+  episodes(limit=50){return this.db.prepare('SELECT * FROM episodes ORDER BY event_at DESC LIMIT ?').all(Math.min(10000,Math.max(1,limit)));}
   deleteEpisode(id){return this.db.prepare('DELETE FROM episodes WHERE id=?').run(id).changes>0;}
   searchFacts(text,limit=16){
     const query=fts(text);if(!query)return [];
