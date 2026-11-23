@@ -15,7 +15,7 @@ const mic = new MyaPushToTalk(
   api,
   (status) => {
     const labels = {
-      idle: 'Microphone OFF · Optional local dictation is not bundled yet',
+      idle: 'Microphone OFF · Click 🎙 to speak when local listening is ready',
       requesting: 'Requesting microphone permission…',
       recording: 'MICROPHONE ON · Click Stop or wait up to 15 seconds',
       processing: 'Recording stopped · Preparing WAV locally…',
@@ -839,6 +839,12 @@ ui('clear-chat').addEventListener('click', async () => {
 ui('mic-toggle').addEventListener('click', async () => {
   if (mic.state === 'recording') { await mic.stop(); return; }
   if (mic.state !== 'idle') { await mic.cancel(); return; }
+  const state=await api.listeningStatus();
+  if (!state.ready) {
+    showTab('settings');
+    toast('Install local listening in Settings to speak through your microphone.');
+    return;
+  }
   // Interrupt Mya so speech doesn't contaminate the user's recording.
   neuralVoicePlayer.cancel();
   speechSession.cancel();
@@ -879,6 +885,30 @@ async function refreshNeuralVoice() {
   try { showNeuralVoiceStatus(await api.neuralVoiceStatus()); }
   catch(error) { ui('neural-voice-status').textContent = 'Voice status error: ' + error.message; }
 }
+async function refreshListeningStatus() {
+  try {
+    const state=await api.listeningStatus();
+    ui('listening-status').textContent=state.ready?'Ready · local-only listening':
+      state.installed?'Installed · loading model…':
+      state.error?'Listening error: '+state.error:'Not installed';
+    ui('install-listening').disabled=state.ready;
+    if(state.ready && mic.state==='idle')
+      ui('mic-status').textContent='Microphone OFF · Click 🎙 to talk to Mya';
+  } catch(error) {
+    ui('listening-status').textContent='Listening status error: '+error.message;
+  }
+}
+ui('install-listening').addEventListener('click',async()=>{
+  if(!confirm('Install Mya’s local Whisper Tiny speech recognition model? This downloads Apache-2.0 model files once, then your recorded microphone audio stays on this computer.'))return;
+  ui('install-listening').disabled=true;
+  ui('listening-status').textContent='Installing Whisper locally…';
+  try{
+    const state=await api.installListening();
+    if(!state.ready)toast('Listening setup: '+(state.error||'model not ready'));
+    else toast('Mya can hear your microphone now! ♡');
+  }catch(error){toast('Listening setup: '+error.message);}
+  await refreshListeningStatus();
+});
 ui('install-voice').addEventListener('click', async () => {
   ui('install-voice').disabled = true;
   ui('neural-voice-status').textContent = 'Downloading Mya voice assets locally. First install requires internet…';
@@ -1013,7 +1043,7 @@ ui('check-mya').addEventListener('click', async () => {
       'Selected avatar: ' + model +
       '\nKawaii FBX: ' + kawaiiStatus +
       '\nMya’s mind: ' + (status.localAI.ready ? 'ready' : status.localAI.state) +
-      '\nVoice input: ' + (status.whisper.reachable ? 'available locally' : 'not configured') +
+      '\nVoice input: ' + (status.whisper.ready ? 'available locally' : 'needs installation') +
       '\nAnimation quality: NOT verified · Accurate lip sync: NOT verified';
   } catch (error) { ui('mya-diagnostics').textContent = 'Diagnostics failed: ' + error.message; }
 });
@@ -1110,6 +1140,7 @@ window.addEventListener('beforeunload', () => { neuralVoicePlayer.dispose(); spe
   try {
     await loadSettings();
     await refreshNeuralVoice();
+    await refreshListeningStatus();
     await refreshEngineStatus();
     showBrainProgress(await api.brainInstallStatus());
     setInterval(refreshEngineStatus, 2200);
