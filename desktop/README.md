@@ -2,6 +2,25 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Mya's local AI girlfriend personality and internet research
+
+Mya runs conversations through your **local Ollama** model (default `gemma3:4b`). Settings now includes **Companion mode** (girlfriend, best friend, gaming partner, productivity, friendly), **Affection**, and **Talkativeness**. The default is an affectionate, lively, playful, independent anime-girlfriend personality. The model is not packaged with the application; install Ollama and a local model first.
+
+**Internet access is optional and starts OFF.** Enable it in Settings to let Mya look up public information while keeping the chat model local. Public search engines receive a brief sanitized query only; neither saved memories nor screen captures are passed to search engines. This permission is separate from screen observation. Supported providers:
+
+- **Wikipedia**: keyless online reference searches (not reliable for live prices, product comparison, or current game patches).
+- **Brave Search**: broader web search with a user-supplied Brave Search API key stored in the app's local user-data directory. The key is never forwarded to the renderer after saving.
+
+Mya can recognize obvious user requests to look things up. If **Auto research** is checked, a local Ollama planning call can decide whether public research may help for technical/game/product questions; queries are rate-limited to 12/hour with a five-minute cache. The answer displays retrieved source buttons after the chat. All web results are untrusted data; they do not authorize purchases, sending messages, running commands or changes to accounts. Chat and local memory work without any internet research. Verify sources rather than treating a search snippet as an independently confirmed fact.
+
+## White avatar / frozen A-pose fixes
+
+The desktop renderer's previous high lighting values were reduced to avoid washing out VRM/GLB materials. In **Settings → Animation diagnostics**, the new material inspector reports mesh/material counts and embedded/assigned textures. This distinguishes an overexposure problem from a texture-import problem; if images exist but no material maps are assigned, inspect the imported character/shader rather than painting the model with a substitute material.
+
+Mya now has **procedural idle and gesture motion** for mapped GLB or VRM humanoid bones when Kawaii FBX retargeting is unavailable. If the Kawaii idle clip claims to work but key bone rotations remain unchanged for five seconds, the renderer automatically switches to that backup. The **Use backup movement** checkbox lets you select this explicitly at any time. Kawaii FBX files remain present and are not overwritten; correct Kawaii retargeting still needs live visual testing.
+
+Neither lower lighting nor procedural movement proves the avatar looks correct on your particular Windows machine. A fully white model can still indicate missing textures or unsupported source materials, and Kawaii hands/shoulders may need a per-rig calibration.
+
 ## GLB and VRM character support
 
 The Mya desktop app accepts **both `.glb` and `.vrm`** through the same Import/Change Avatar button. VRM 0.x and VRM 1.0 are interpreted with the local `@pixiv/three-vrm` loader; GLB support remains unchanged. Every user-selected avatar must include a usable skinned humanoid model, embedded assets and a valid glTF binary structure. A `.vrm` must contain the appropriate VRM extension.
