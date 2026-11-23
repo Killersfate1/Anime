@@ -2,6 +2,18 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Persistent local Relay memory core
+
+Relay now includes a modular **SQLite/FTS5 memory system** in [relay-core/](relay-core/README.md), independent of Unity rendering. It stores complete finished chat exchanges locally, creates reviewable semantic fact candidates, captures periodic episodic summaries, tracks interaction history without human-feelings claims, and retrieves relevant approved memories before each reply. All database files live under the current Windows user's Electron application-data folder.
+
+The **Settings → Relay's local memory** section exposes approved notes, pending fact review, conversation history, episodic memories, local embeddings setup, export and complete reset. Historical approved JSON notes are imported once into SQLite; they are not discarded before the migration succeeds. Only approved facts are used as reliable user memory; screen captures and online research are not used to infer permanent personal facts.
+
+Keyword retrieval works immediately using SQLite FTS5. Semantic retrieval uses an Apache-2.0 MiniLM embedding model on the user's PC, installed only with explicit permission and then cached for offline use. Local vectors are stored with model IDs inside the SQLite database. The installer currently does **not** bundle that separate embedding model, so semantic retrieval requires one-time setup; without it, FTS5 retrieval still works.
+
+The chat model's weights are **not fine-tuned or modified** during ordinary use. Relationship state measures interaction count, shared activities and confirmed communication preferences; it does not imply Mya has feelings. A versioned allowlisted local protocol is defined in `relay-core/protocol.cjs`; a cross-process Unity named-pipe client has not yet been implemented.
+
+**Commercial release is not yet complete.** The repo excludes large GGUF model weights and the llama.cpp runtime binary. For Steam, evaluate a redistributable quantized model such as Qwen3-4B-Instruct-2507 (Apache-2.0), verify the specific conversion and dependencies, and bundle the model with llama.cpp and license notices. The previously uploaded VRM's usage restrictions also require resolution before shipping its character asset. See [Relay Steam architecture and checklist](relay-core/README.md).
+
 ## Mya's bold girlfriend personality
 
 Mya's default girlfriend personality is now **very flirtatious (0.95), affectionate (0.95), and talkative (0.90)**. She uses charming banter, confident teasing, romantic warmth and engaging longer replies. The personality adapts to context; serious technical questions and gameplay strategy should stay focused rather than becoming canned compliments.
@@ -144,15 +156,11 @@ Voice input is now coded through the **🎙 microphone button**. It requires a *
 - A persistent microphone indicator displays when capture is active. Closing or minimizing cancels recording. A locally transcribed utterance becomes a user chat message.
 - No wake word, hands-free always-listening, full-duplex barge-in, or expressive neural TTS is implemented yet. The existing voice response is system TTS, not accurate lip sync.
 
-## Conversation continuity
+## Conversation continuity and long-term memory
 
-Mya now has recent in-memory context for **12 question/answer turns**, with a **Clear session** control. This context is deliberately not saved automatically. Manually approved memories remain separate in local settings.
+Relay stores completed conversation turns persistently in SQLite and restores their context across launches. Clear session starts a new conversation without deleting old archived chats. Unapproved factual suggestions stay pending for review; episodes and approved facts can be inspected or deleted separately. The full-reset control deletes all personal memory records, relationship counters, transcripts, episodes and vector rows.
 
-## Reviewed long-term memories
-
-The Settings panel supports **manually approved** long-term notes, preferences, projects, shared activities and conversation memories. Each entry can be reviewed, edited or individually deleted. Export writes JSON only after a user chooses a destination in a native Save dialog; Erase all requires confirmation. None of these memory actions infer private facts from screenshots or microphone recordings.
-
-When Mya answers, she retrieves up to twelve approved memories by a simple keyword-matching rank. This is **not** vector search or advanced semantic memory yet. Conversation context from the current session remains separate and is never saved automatically.
+Search combines SQLite FTS5 and, when installed, a local MiniLM embedding model with recency and importance. Semantic weights and inference binaries are not shipped by the source repository.
 
 ## Screen context and analysis performance
 
