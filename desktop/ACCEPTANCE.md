@@ -6,7 +6,7 @@
 
 1. Get the current `main` of `Killersfate1/Anime`.
 2. Install Node.js and the project's Electron dependencies: `cd desktop; npm install`.
-3. Install Ollama; `ollama pull gemma3:4b`. Confirm the model supports vision.
+3. Select a locally installed llama.cpp `llama-server` executable and instruction-tuned GGUF through Mya's Settings, then click **Start Mya AI**. For vision, select a multimodal-compatible model and any required matching mmproj GGUF.
 4. For voice input, install/run the `whisper.cpp` server on `127.0.0.1:8080` with a speech-recognition model.
 5. Supply the **exact** Mya GLB, SHA-256 `2fd4937d69168f4234854dd634f0135e3a92165f16b5918dc52942a78ed09618`. Import it through Mya's desktop UI, or place it under `Assets/UserAssets/Mya.glb`. The file itself is not committed to the public repository.
 6. Execute `npm run check`, `npm test`, then `npm start`.
@@ -15,13 +15,13 @@
 
 | Step | Action | Expected result | Current status |
 |---|---|---|---|
-| 1 | Open Mya and click Settings > Check services | Canonical GLB verified; 12 Kawaii FBX files; Ollama reachable; whisper.cpp reachable | **Not run on Windows** |
+| 1 | Open Mya and click Settings > Check services | Canonical GLB verified; 12 Kawaii FBX files; Mya GGUF engine running; whisper.cpp reachable | **Not run on Windows** |
 | 2 | Select Mya's exact GLB | Canonical character appears, materials/hair/rig intact; no replacement model | **Not visually verified** |
 | 3 | Click Test Kawaii wave | One properly retargeted wave, smooth exit to idle, no clipping/twitching | **Not visually verified** |
 | 4 | Check facial diagnostics | No jaw or morph targets in supplied GLB; optional fallback starts OFF | **GLB contents verified; UI not verified** |
 | 5 | Enable and manually calibrate mouth overlay | Speech approximation stays aligned to her face as head moves | **Not visually verified** |
 | 6 | Click Test voice + mouth | System voice, Kawaii talk animation and approximate mouth motion occur together; final idle pose returns | **Code tests only** |
-| 7 | Click microphone; speak; stop | Visible mic indicator, local Whisper transcription, transcript enters chat and reaches Ollama | **Not tested with devices/services** |
+| 7 | Click microphone; speak; stop | Visible mic indicator, local Whisper transcription, transcript enters chat and reaches the local GGUF engine | **Not tested with devices/services** |
 | 8 | Speak again while Mya is talking | Existing voice stops, recording starts; no overlapping speech | **Code path implemented, not device tested** |
 | 9 | Cancel during recognition | No canceled transcript is allowed to create a delayed chat message | **Cancellation guards implemented; not device tested** |
 | 10 | Ask a follow-up question | Reply uses recent session context; Clear session deletes that context | **Isolated logic checked** |
@@ -38,7 +38,7 @@
 
 ## Test results recording
 
-After running the app locally, record the date, Windows version, GPU, Ollama model, whisper.cpp model, each step's PASS/FAIL, relevant screenshots/Console logs and whether facial overlay coordinates remain stable with animated head turns. Do not change the canonical GLB while diagnosing a failed animation: work on mappings/controllers instead.
+After running the app locally, record the date, Windows version, GPU, GGUF model, whisper.cpp model, each step's PASS/FAIL, relevant screenshots/Console logs and whether facial overlay coordinates remain stable with animated head turns. Do not change the canonical GLB while diagnosing a failed animation: work on mappings/controllers instead.
 
 ### Success threshold for this milestone
 
@@ -61,7 +61,7 @@ These tests require Windows rendering and have **not** been completed in this se
 
 - Launch after pulling `main`; verify visible materials/texture counts in Settings. No substitute materials or avatar file replacements should occur.
 - If the avatar stays in A-pose, select **Use backup movement**, then **Test Kawaii wave**; the original VRM/GLB should move conservatively without deformation. Uncheck to retest purchased Kawaii FBX retargeting. A static clip should auto-fallback after five seconds.
-- With Ollama running, choose **Affectionate anime girlfriend** and send several messages. Confirm Mya responds playfully but doesn't invent screen awareness or online searches.
+- With Mya GGUF AI running, choose **Affectionate anime girlfriend** and send several messages. Confirm Mya responds playfully but doesn't invent screen awareness or online searches.
 - Enable web research and choose Wikipedia for a general-knowledge lookup. Confirm a query appears with traceable HTTPS sources. Disable it and verify no external request is made.
 - For broader search, choose Brave and provide an API key. Confirm rate limiting, correct citations, and that credential never appears in the UI after saving.
 
@@ -74,3 +74,14 @@ The GLB uploaded in chat contains four embedded WebP texture images; the VRM con
 ### VRM raw-versus-normalized rig regression
 
 Confirm the Three-VRM loader retains `autoUpdateHumanBones: false` because Mya animates raw humanoid bones. If it is true, `vrm.update()` can overwrite raw-bone Kawaii and procedural pose changes with normalized rest-pose values, causing a persistent A-pose. Verify live VRM wave/idle movement after this loader fix on Windows. Runtime visual verification remains outstanding.
+
+## Local inference acceptance (replaces the Ollama dependency)
+
+- Confirm Mya's Settings can choose a `llama-server.exe` and valid GGUF model and start/stop the inference process. No other service is required for typed chat.
+- Verify the server binds only to `127.0.0.1:18931`, authenticates each inference request using the runtime's in-memory key, and shuts down when Mya exits.
+- Hold a 5–10-turn conversation; verify references to prior turns and streaming text. Interrupt mid-response and confirm no ghost reply is saved to session context.
+- Try the optional voice path using local whisper.cpp; verify that a microphone cancellation does not become a delayed chat message.
+- If vision is used, verify that a multimodal-capable model and required mmproj are selected, and that screen monitoring remains explicitly permission-gated.
+- Check CPU mode first for memory stability; tune GPU layers only after actual Windows testing.
+
+**These integration checks have not been performed against the user's PC.** CI checks isolated Node functionality, not real GGUF load or speech/graphics quality.
