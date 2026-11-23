@@ -1,5 +1,9 @@
 # Mya / Relay AI Kawaii
 
+## Avatar formats
+
+The Electron app supports both **GLB and VRM 0.x/1.0**. VRM avatars can use native humanoid mappings, expression presets and spring-bone updates when present. Character files are imported locally, not published to this public repository. After pulling changes, run `npm install` in `desktop/` to install `@pixiv/three-vrm`.
+
 ## Desktop companion — new source foundation
 
 A new local-first Electron desktop app is available in [`desktop/`](desktop/README.md). It provides a transparent desktop avatar window, a SHA-256-checked import of the canonical GLB, local Ollama text/vision, user-selected screen observation with frame-change detection, short-lived screen context, session chat history, **push-to-talk transcription through a locally running whisper.cpp server**, reviewed categorized memories with editing/export, basic system voice output, and privacy/quiet controls.
