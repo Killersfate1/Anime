@@ -973,12 +973,14 @@ function showBrainProgress(progress) {
 api.onBrainInstallProgress(showBrainProgress);
 ui('open-brain-setup').addEventListener('click',()=>showTab('settings'));
 ui('install-brain').addEventListener('click',async()=>{
-  if(!confirm('Install Mya’s private local AI? This downloads approximately 2.5 GB of Apache-2.0 model weights from Qwen/Hugging Face and the official MIT-licensed llama.cpp Windows CPU engine from GitHub. The downloads are verified by SHA-256. Conversation inference stays on this computer after installation. Allow this one-time download?'))return;
+  const tier=ui('brain-model-tier').value==='lite'?'lite':'standard';
+  const size=tier==='lite'?'1.28 GB':'2.5 GB';
+  if(!confirm('Install Mya’s private local '+(tier==='lite'?'Lite':'Standard')+' AI? This downloads approximately '+size+' of Apache-2.0 Qwen model weights and an MIT-licensed llama.cpp Windows CPU engine from their official hosts. Both downloads are verified by SHA-256. After installation, inference stays on your computer. Allow this download?'))return;
   ui('install-brain').disabled=true;
   ui('cancel-brain-install').disabled=false;
   ui('brain-download-progress').textContent='Preparing Mya’s local brain download…';
   try{
-    const result=await api.installBrain();
+    const result=await api.installBrain(tier);
     if(!result.ok)toast('Brain installation failed: '+result.error);
     else toast('Mya is ready to have conversations! ♡');
   }catch(error){toast('Brain installation error: '+error.message);}
