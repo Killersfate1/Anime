@@ -22,7 +22,7 @@ The database is created in Electron's per-user \`app.getPath('userData')\` direc
 
 The database is in WAL mode with restricted file permissions as supported by the OS. Data at rest is **not encrypted** by this implementation; Windows full-disk encryption/DPAPI integration and a threat-model review are still needed for a security-hardened commercial release. Avoid putting secrets in memories, exports or debug logs.
 
-The first run imports the pre-existing manually approved \`memories.json\` entries into SQLite. Migration completion is tracked in the database so importing again does not multiply memories. Legacy JSON remains on disk as a recovery copy until the user deletes it or performs a full memory reset.
+The first run imports the pre-existing approved `memories.json` entries into SQLite in a transaction. After committing the imported facts and migration marker, the old JSON copy is deleted to prevent resurrection of memories later deleted from SQLite.
 
 ## Dialogue pipeline
 
