@@ -2,6 +2,14 @@
 
 This is an **initial executable desktop foundation**, not yet a verified, complete anime companion. It is separate from the Unity asset-authoring scene in `Assets/Relay`.
 
+## Mya's bold girlfriend personality
+
+Mya's default girlfriend personality is now **very flirtatious (0.95), affectionate (0.95), and talkative (0.90)**. She uses charming banter, confident teasing, romantic warmth and engaging longer replies. The personality adapts to context; serious technical questions and gameplay strategy should stay focused rather than becoming canned compliments.
+
+Settings includes **Flirtation** and **Mature banter** controls. Mature banter enables suggestive innuendo, playful naughty jokes, and occasional adult language while retaining consent, non-graphic language and emotional independence. These settings apply only to the girlfriend personality, not the friend, gaming or productivity modes. It does not make the AI generate graphic sexual content.
+
+Older installations with exactly the former default values are upgraded to the stronger settings; deliberately customized personality values are preserved. The local GGUF model still determines how consistently Mya follows the persona. Changes are source-level until actually tested with your selected model.
+
 ## Mya's neural anime voice (Kokoro, on-device)
 
 Mya has an integrated **Kokoro 82M neural speech engine** in the Electron application. This is different from Windows' basic system voice: Kokoro generates expressive, natural-sounding speech **on this computer** with a light model, not using a cloud voice API or an independent speech server. A Node worker keeps speech synthesis off the 3D rendering thread.
