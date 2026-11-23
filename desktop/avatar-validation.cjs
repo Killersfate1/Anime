@@ -75,7 +75,7 @@ function inspectGlb(data, maxBytes = 100 * 1024 * 1024) {
 }
 
 function inspectAvatar(data, filenameExtension) {
-  const extension = String(filenameExtension || '').toLowerCase().replace(/^\\./, '');
+  const extension = String(filenameExtension || '').toLowerCase().replace(/^\./, '');
   if (extension !== 'glb' && extension !== 'vrm')
     return { valid: false, reason: 'Only .glb and .vrm avatars are supported' };
   const inspection = inspectGlb(data);
