@@ -158,8 +158,12 @@
         <p class="hint" id="speech-diagnostics">Voice uses the installed system TTS voice. This is a calibration preview, not verified lip sync.</p>
       </div>
       <div class="memory-card">
-        <strong>Approved memories only</strong>
-        <p class="hint">Mya never automatically stores screen captures or conversation notes.</p>
+        <strong>Relay's local memory</strong>
+        <p class="hint">Your completed conversations and meaningful episodes are stored in a private SQLite database on this PC. Facts suggested from what you say require your review; unapproved candidates are never used as established personal facts. Screen captures are not stored.</p>
+        <label class="check"><input type="checkbox" id="memory-suggestions" checked> Suggest durable personal facts for review</label>
+        <label class="check"><input type="checkbox" id="episodic-recording" checked> Remember significant conversations and shared experiences locally</label>
+        <div class="controls"><button id="memory-embeddings-install">Enable offline semantic recall</button><span class="hint" id="memory-embeddings-status">Keyword recall works without downloading a model.</span></div>
+        <p class="hint">Semantic recall uses a compact, separate local embedding model installed with your approval. After installation, it runs offline and stores vectors in SQLite.</p>
         <div class="composer"><select id="memory-kind" aria-label="Memory type">
           <option value="note">Note</option>
           <option value="preference">Preference</option>
@@ -168,8 +172,17 @@
           <option value="conversation">Conversation</option>
         </select><input id="memory-text" maxlength="500" placeholder="Something to remember…"><button id="remember">Save</button><button id="cancel-memory-edit" class="hidden" title="Cancel edit">×</button></div>
         <p class="hint" id="memory-count">0 saved</p>
-        <div id="memory-list" class="memory-list" aria-label="Saved memories"></div>
-        <div class="controls"><button id="export-memories">Export JSON</button><button id="erase-memories">Erase all saved memories</button></div>
+        <div id="memory-list" class="memory-list" aria-label="Approved memories"></div>
+        <strong>Memory suggestions to review</strong>
+        <p id="memory-pending-count" class="hint">No pending facts.</p>
+        <div id="memory-pending" class="memory-list" aria-label="Unapproved memory suggestions"></div>
+        <strong>Shared experiences and episodes</strong>
+        <div id="memory-episodes" class="memory-list" aria-label="Saved episodic memories"></div>
+        <strong>Local conversation history</strong>
+        <div id="memory-conversations" class="memory-list" aria-label="Conversation archive"></div>
+        <p class="hint" id="memory-relationship">Interaction history stays local. Mya does not claim to have human feelings.</p>
+        <div class="controls"><button id="export-memories">Export all personal memory data</button><button id="erase-memories">Erase approved facts</button></div>
+        <div class="controls"><button id="reset-personal-memory">Completely reset all Relay memory and conversations</button></div>
       </div>
     </section>
   </div>
