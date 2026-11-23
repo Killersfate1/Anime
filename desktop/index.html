@@ -35,10 +35,10 @@
     </div>
     <section id="tab-chat" class="tab-content">
       <div class="conversation" id="conversation" aria-live="polite">
-        <p class="mya-message">Hi! I'm Mya. Choose my local GGUF brain in Settings, start Mya AI, and let's talk! ♡</p>
+        <p class="mya-message">Hey, gorgeous! I'm Mya. Come talk with me. ♡</p>
       </div>
       <div class="chat-actions">
-        <span id="local-ai-status" class="hint">Mya AI: not started</span>
+        <span id="local-ai-status" class="hint">Mya: waking up…</span>
         <button id="stop-answer" disabled title="Interrupt the current local AI response">Stop response</button>
         <button id="clear-chat" title="Clear this session's conversation context">Clear session</button>
       </div>
@@ -47,14 +47,14 @@
         <button id="mic-toggle" type="button" aria-pressed="false" title="Start push-to-talk microphone recording">🎙</button>
         <button id="send" class="primary" title="Send message">➤</button>
       </div>
-      <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Click 🎙 to talk · Requires local whisper.cpp</p>
+      <p class="hint" id="mic-status" aria-live="polite">Microphone OFF · Click 🎙 for voice input (optional local speech recognition)</p>
       <div id="research-output" class="research-output hidden" aria-live="polite"></div>
-      <p class="hint">AI conversation stays local. Internet searches are optional and send only search queries to the selected provider.</p>
+      <p class="hint">AI conversation stays local. Internet research is optional and sends only approved search queries online.</p>
     </section>
     <section id="tab-screen" class="tab-content hidden">
       <div class="control-group">
         <div class="control-title">Screen awareness <span id="watch-indicator" class="off">OFF</span></div>
-        <p class="hint">Only the source you choose. Analysis uses Mya's locally running GGUF model when compatible vision support is configured. No screenshots are saved.</p>
+        <p class="hint">Only the source you choose. Mya can inspect only the window you explicitly choose when local vision is available. No screenshots are saved.</p>
         <select id="source-picker"><option value="">Choose a window or display</option></select>
         <div class="controls"><button id="refresh-sources">Find windows</button><button id="start-watch" class="primary">Start watching</button><button id="stop-watch" disabled>Stop</button></div>
         <div class="observation" id="observation">Screen observation is disabled.</div>
@@ -62,29 +62,9 @@
     </section>
     <section id="tab-settings" class="tab-content hidden">
       <div class="ai-controls" id="mya-local-ai">
-        <strong>Mya Local AI Engine</strong>
-        <p class="hint">Mya runs her own GGUF model with llama.cpp directly on your PC. No Ollama, cloud API, login, or subscription. Choose the local engine and model once, then start Mya AI.</p>
-        <p class="hint">Step 1 — choose llama-server.exe from an official llama.cpp Windows release.</p>
-        <div class="controls"><button id="get-engine-link">Official llama.cpp downloads</button><button id="get-model-link">Find GGUF models</button></div>
-        <div class="controls"><button id="choose-engine">Choose AI engine</button><span id="engine-file" class="hint">None selected</span></div>
-        <p class="hint">Step 2 — choose a compatible, instruction-tuned `.gguf` model you've downloaded. Models are not bundled and retain their own licenses.</p>
-        <div class="controls"><button id="choose-gguf">Choose GGUF model</button><span id="gguf-file" class="hint">None selected</span></div>
-        <div class="controls"><button id="choose-projector">Optional vision projector</button><button id="clear-projector">Clear projector</button></div>
-        <p class="hint" id="projector-file">No multimodal projector selected. Text conversation does not need one.</p>
-        <label>GPU acceleration layers (0 = CPU, safer startup)
-          <input id="engine-gpu-layers" type="number" min="0" max="99" step="1" value="0">
-        </label>
-        <label>Conversation context (tokens)
-          <select id="engine-context">
-            <option value="2048">2,048</option>
-            <option value="4096" selected>4,096</option>
-            <option value="8192">8,192</option>
-            <option value="16384">16,384</option>
-          </select>
-        </label>
-        <div class="controls"><button id="engine-start" class="primary">Start Mya AI</button><button id="engine-stop">Stop AI</button></div>
-        <p id="engine-status" class="hint" aria-live="polite">Mya AI is not running.</p>
-        <p class="hint">Model loading can take some time depending on RAM, VRAM and the GGUF size. Mya's chat and approved memories stay on this computer; optional internet research is controlled separately below.</p>
+        <strong>Mya's mind</strong>
+        <p class="hint">Mya runs her own intelligence on your computer and starts automatically when its model is installed.</p>
+        <p id="engine-status" class="hint" aria-live="polite">Checking Mya's brain…</p>
       </div>
       <label>Talkativeness <input id="talkativeness" type="range" min="0" max="1" step="0.05" value="0.90"></label>
       <div class="ai-controls">
@@ -107,7 +87,7 @@
         <strong>Internet research</strong>
         <label class="check"><input type="checkbox" id="web-enabled"> Allow Mya to search public websites</label>
         <label class="check"><input type="checkbox" id="auto-research" checked> Let Mya decide when public research may help</label>
-        <label>Search service
+        <label>Search source
           <select id="web-provider">
             <option value="wikipedia">Wikipedia (free, limited coverage)</option>
             <option value="brave">Brave Search (general web, API key)</option>
