@@ -37,7 +37,7 @@ function logRuntimeFault(category, details) {
 
 
 const DEFAULTS = Object.freeze({
-  // The local GGUF selected in Settings is the only inference model.
+  // Mya uses only her local bundled or previously configured model.
   talkativeness: 0.90,
   voiceEnabled: true,
   voiceMode: 'neural',
@@ -422,8 +422,8 @@ function registerIpc() {
       const text = cleanText(result?.text || result?.transcription || '', 2000);
       return text ? { text } : { error: 'Whisper reported no spoken words' };
     } catch (error) {
-      return { error: 'Local speech recognition unavailable. Start whisper.cpp server on 127.0.0.1:8080. ' +
-        (error?.message || 'Transcription failed') };
+      return { error: 'Voice input is not fully bundled into this development build yet. ' +
+        'Mya needs a local speech-recognition component; typed chat and her speaking voice are independent.' };
     } finally {
       clearTimeout(timeout);
       if (activeTranscription === controller) activeTranscription = null;
