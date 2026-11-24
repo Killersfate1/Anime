@@ -248,3 +248,7 @@ Use the **Desktop** button after importing your VRM or press **Ctrl+Shift+D** to
 5. Test voice and opt-in screen observation while in overlay mode; verify stop controls remain reachable. Test text replies and speech bubbles. Confirm no capture begins on entering desktop mode.
 
 Still open: live window-following, authored Kawaii seated/walking animations and IK calibration, arbitrary taskbar orientations, Steam/fullscreen compatibility and real Windows testing. These changes do not resolve an absent local GGUF runtime/model by themselves.
+
+## Movement repair / Synty locomotion preview
+
+The repository's Synty feminine non-root-motion walk is allowlisted beside Kawaii gestures. **Ctrl+Shift+F10** starts/stops a desktop patrol along the bottom work-area edge. The avatar must load successfully and the walk must produce bound, moving leg tracks before the desktop window moves. The retargeter now samples a cloned skeleton, binds quaternion tracks by live bone UUID and discards position/scale tracks. VRM raw humanoid animation is no longer reset every frame. Entering seated mode, returning to chat, enabling mouse interaction or changing monitor geometry stops walking. This is a first patrol, not authored turn transitions or verified foot locking; test facing, gait, contact and speed in Windows.
