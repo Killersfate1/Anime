@@ -151,23 +151,32 @@ export class MyaKawaiiAnimation {
       }
 
       const byName = new Map(source.skeleton.bones.map(b => [normalize(b.name), b.name]));
+      // Kawaii FBXs may prefix humanoid bones with namespace or rig prefixes
+      // (e.g. mixamorig:Hips). The old exact-only lookup missed valid rigs.
+      const sourceBoneName = name => {
+        const normalized=normalize(name);
+        return byName.get(normalized) ||
+          [...byName.entries()].find(([key]) => key.endsWith(normalized))?.[1];
+      };
       const names = {};
       if (this.vrm?.humanoid) {
         const skinnedBoneNames = new Set(this.skinnedMesh.skeleton.bones.map(b => b.name));
         for (const [humanBone, sourceName] of Object.entries(VRM_TO_FBX)) {
           const targetBone = this.vrm.humanoid.getRawBoneNode?.(humanBone);
-          const sourceBone = byName.get(normalize(sourceName));
+          const sourceBone = sourceBoneName(sourceName);
           if (targetBone && skinnedBoneNames.has(targetBone.name) && sourceBone)
             names[targetBone.name] = sourceBone;
         }
       } else for (const bone of this.skinnedMesh.skeleton.bones) {
         const expected = BONE_NAMES[keyOfTargetBone(bone.name)];
         if (!expected) continue;
-        const original = byName.get(normalize(expected));
+        const original = sourceBoneName(expected);
         if (original) names[bone.name] = original;
       }
-      if (Object.keys(names).length < 15)
-        throw new Error('Insufficient humanoid bone mapping for Kawaii retarget');
+      const mappedBones=Object.keys(names).length;
+      if (mappedBones < (this.vrm ? 9 : 15))
+        throw new Error('Insufficient humanoid bone mapping for Kawaii retarget (' +
+          mappedBones + ' mapped). Check VRM humanoid bone assignments and FBX names.');
 
       const clip = sourceRoot.animations?.[0];
       if (!clip) throw new Error('No animation in source FBX');

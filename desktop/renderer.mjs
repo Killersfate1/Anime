@@ -62,12 +62,14 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.setClearColor(0x000000, 0);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.90;
-scene.add(new THREE.HemisphereLight(0xffe5fa, 0x55416e, 0.82));
-const keyLight = new THREE.DirectionalLight(0xffffff, 1.05);
+renderer.toneMappingExposure = 0.78;
+// Use neutral light to preserve the imported VRM's original skin and clothing.
+// Do not substitute textures or destructively change the MToon materials.
+scene.add(new THREE.HemisphereLight(0xffffff, 0x615d66, 0.57));
+const keyLight = new THREE.DirectionalLight(0xffffff, 0.72);
 keyLight.position.set(2.0, 4.5, 3.5);
 scene.add(keyLight);
-const fillLight = new THREE.DirectionalLight(0xc289ee, 0.32);
+const fillLight = new THREE.DirectionalLight(0xece8f1, 0.18);
 fillLight.position.set(-3.5, 1.4, -3.0);
 scene.add(fillLight);
 
@@ -77,6 +79,7 @@ let vrmBaseYaw = 0;
 let avatarBaseQuaternion = new THREE.Quaternion();
 let manualAvatarFlip = false;
 let avatarOrientationStatus = '';
+let orientationRecheckAt = 0;
 let kawaii = null;
 let procedural = null;
 let preferProcedural = false;
@@ -159,8 +162,12 @@ function inspectAvatarMaterials(gltf) {
     'Meshes: ' + meshes + ' · Materials: ' + materials.size +
     ' · Material texture maps: ' + textured +
     ' · Embedded images: ' + images + ' · glTF textures: ' + maps +
+    ' · White base-color materials: ' + whiteMaterials +
     (textured === 0 && images !== 0 && images !== 'unknown'
       ? ' · WARNING: images exist but no active texture maps were detected'
+      : '') +
+    (Number(images) === 0 && Number(maps) === 0
+      ? ' · No embedded textures found: re-export the VRM with its images to recover colors'
       : '');
 }
 function reportMotionStatus() {
@@ -348,6 +355,9 @@ function applyAvatar(gltf) {
   baseEyes = eyeBones.map(node => node.quaternion.clone());
   characterYaw = vrmBaseYaw;
   moveToRest();
+  // Some VRM rigs finalize humanoid transforms after their first update.
+  // Recheck only once; preserve manual user orientation corrections.
+  orientationRecheckAt=performance.now()+950;
   ui('avatar-flip').title = avatarOrientationStatus + ' · Flip 180° manually';
   ui('avatar-empty').classList.add('hidden');
   ui('avatar-status').textContent = activeVRM
@@ -374,7 +384,9 @@ function applyAvatar(gltf) {
       };
     }
     if (!ok) {
-      ui('avatar-status').textContent = 'Fallback movement active; Kawaii retarget needs calibration';
+      ui('avatar-status').textContent = procedural?.status.animated
+        ? 'Backup idle motion active · Kawaii retarget needs calibration'
+        : 'No compatible humanoid animation bones · inspect the VRM rig';
       toast('Mya is using basic fallback movement. Kawaii FBX retarget still needs fixing.');
     } else if (kawaii.failed.length) {
       console.warn('Mya Kawaii retarget warnings:', kawaii.failed);
@@ -415,9 +427,25 @@ function frame(t) {
   const interval = currentSettings.economyMode ? 1000 / 30 : 1000 / 60;
   if (t - lastFrameAt < interval) return;
   lastFrameAt = t;
+  if(character && orientationRecheckAt && t>=orientationRecheckAt) {
+    orientationRecheckAt=0;
+    if(!manualAvatarFlip) {
+      const secondPass=autoUprightAvatar(character,activeVRM);
+      if(secondPass.corrected) {
+        avatarBaseQuaternion.copy(character.quaternion);
+        characterYaw=0;
+        moveToRest();
+        ui('avatar-status').textContent='Corrected inverted VRM orientation after loading · rig preserved';
+      }
+    }
+  }
   const elapsed = clock.getElapsedTime();
   const delta = previousAnimationTime ? Math.min((t - previousAnimationTime) / 1000, 0.05) : 0.016;
   previousAnimationTime = t;
+  // VRM.update() can reset humanoid pose transforms. Animate raw humanoid
+  // bones AFTER its internal update so the visible frame is not an A-pose.
+  face?.update(delta);
+  activeVRM?.update(delta);
   const useKawaii = !preferProcedural && kawaii?.ready;
   if (useKawaii) {
     kawaii.update(delta);
@@ -448,10 +476,6 @@ function frame(t) {
   // The fallback maintains coherent idle motion when Kawaii retarget is
   // missing. Do not apply separate GLB bone oscillations on top of it.
   neuralVoicePlayer.update();
-  face?.update(delta);
-  // VRM.update drives native expressions, spring bones, node constraints and
-  // other VRM-supported dynamic components. Keep this after face input.
-  activeVRM?.update(delta);
   renderer.render(scene, camera);
 }
 function resize() {
