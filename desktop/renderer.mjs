@@ -16,6 +16,11 @@ let desktopSpeechTimer = null;
 let desktopSeat = null;
 let seatCameraPending = false;
 let seatRig = null;
+let walking = false;
+let walkPreparing = false;
+let walkDirection = 1;
+let walkBaseYaw = 0;
+let walkCameraPending = false;
 const mic = new MyaPushToTalk(
   api,
   (status) => {
@@ -235,6 +240,7 @@ function applyDesktopSeat() {
   }
 }
 function playMyaGesture(name) {
+  if (walking || walkPreparing) return true;
   if (!preferProcedural && kawaii?.ready && kawaii.play(name)) return true;
   return procedural?.play(name) || false;
 }
@@ -248,6 +254,7 @@ let baseHead = null;
 let baseEyes = [];
 let baseChest = null;
 let modelCenter = new THREE.Vector3();
+let walkGroundY = 0;
 let viewportDistance = 3;
 let characterYaw = 0;
 let speaking = false;
@@ -356,6 +363,7 @@ function moveToRest() {
   const box = new THREE.Box3().setFromObject(character);
   const size = box.getSize(new THREE.Vector3());
   modelCenter = box.getCenter(new THREE.Vector3());
+  if (!walking && !desktopSeat) walkGroundY=box.min.y;
   const fov = THREE.MathUtils.degToRad(camera.fov);
   viewportDistance = Math.max(0.5, 1.12 * Math.max(size.y, size.x * 1.5) / (2 * Math.tan(fov / 2)));
   camera.position.set(modelCenter.x, modelCenter.y + size.y * 0.04, modelCenter.z + viewportDistance);
@@ -381,7 +389,13 @@ function applyAvatar(gltf) {
       for (const material of materials) material.dispose?.();
     });
   }
+  if (walking || walkPreparing) void api.stopDesktopWalk();
+  walking=false;
+  walkPreparing=false;
   activeVRM = gltf.userData?.vrm || null;
+  // The mixer and procedural fallback own RAW humanoid bones. Prevent the
+  // normalized humanoid updater from resetting them every frame.
+  if (activeVRM?.humanoid) activeVRM.humanoid.autoUpdateHumanBones=false;
   if (activeVRM?.meta?.metaVersion === '0') VRMUtils.rotateVRM0(activeVRM);
   character = activeVRM?.scene || gltf.scene;
   scene.add(character);
@@ -500,11 +514,8 @@ function frame(t) {
   const elapsed = clock.getElapsedTime();
   const delta = previousAnimationTime ? Math.min((t - previousAnimationTime) / 1000, 0.05) : 0.016;
   previousAnimationTime = t;
-  // VRM.update() can reset humanoid pose transforms. Animate raw humanoid
-  // bones AFTER its internal update so the visible frame is not an A-pose.
   face?.update(delta);
-  activeVRM?.update(delta);
-  const useKawaii = !preferProcedural && kawaii?.ready;
+  const useKawaii = (walking || !preferProcedural) && kawaii?.ready;
   if (useKawaii) {
     kawaii.update(delta);
     if (movementCheck) {
@@ -526,7 +537,7 @@ function frame(t) {
       }
     }
   } else procedural?.update(delta);
-  if (!speaking && t > nextIdleMoment) {
+  if (!walking && !walkPreparing && !speaking && t > nextIdleMoment) {
     const choices = ['Idle', 'Idle', 'LookAround', 'Waiting', 'Stretch'];
     playMyaGesture(choices[Math.floor(Math.random() * choices.length)]);
     nextIdleMoment = t + 14000 + Math.random() * 14000;
@@ -534,6 +545,8 @@ function frame(t) {
   // The fallback maintains coherent idle motion when Kawaii retarget is
   // missing. Do not apply separate GLB bone oscillations on top of it.
   applyDesktopSeat();
+  if (walking && walkCameraPending) alignWalkingFeet();
+  activeVRM?.update(delta);
   neuralVoicePlayer.update();
   renderer.render(scene, camera);
 }
@@ -545,6 +558,7 @@ function resize() {
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
   if (desktopSeat) seatCameraPending=true;
+  if (walking) walkCameraPending=true;
 }
 new ResizeObserver(resize).observe(ui('avatar-stage'));
 resize();
@@ -1215,10 +1229,79 @@ ui('quit').addEventListener('click', async () => {
   await mic.cancel();
   api.quit();
 });
-api.onDesktopError(message => toast('Desktop seat: ' + message));
+function alignWalkingFeet() {
+  walkCameraPending=false;
+  if (!character) return;
+  // Use the imported standing bounds for a stable ground reference, not
+  // animated foot positions that would make the camera bounce on each step.
+  camera.updateMatrixWorld(true);
+  const ground=new THREE.Vector3(modelCenter.x,walkGroundY,modelCenter.z);
+  const depth=-ground.clone().applyMatrix4(camera.matrixWorldInverse).z;
+  const projected=ground.clone().project(camera);
+  if (depth>0 && Number.isFinite(projected.y)) {
+    const targetY=-0.96;
+    const offset=(projected.y-targetY)*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+    camera.position.addScaledVector(new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion),offset);
+    camera.updateMatrixWorld(true);
+  }
+}
+function applyWalkDirection(direction) {
+  walkDirection=direction===-1?-1:1;
+  if (!character) return;
+  characterYaw=walkBaseYaw+walkDirection*Math.PI/2;
+  rotateAvatarManual(character,avatarBaseQuaternion,manualAvatarFlip,characterYaw);
+}
+let walkGeneration=0;
+api.onWalkRequest(async () => {
+  if (walkPreparing) { walkGeneration++; walkPreparing=false; return; }
+  if (walking) { await api.stopDesktopWalk(); return; }
+  if (!character || !kawaii?.ready || preferProcedural) {
+    toast('Walking requires a loaded avatar with working FBX retargeting. Disable backup-only animation first.');
+    return;
+  }
+  const controller=kawaii;
+  const generation=++walkGeneration;
+  walkPreparing=true;
+  try {
+    toast('Preparing Synty walking animation…');
+    if (!await controller.prepare('Walk') || controller!==kawaii) {
+      if (generation===walkGeneration) toast('Walking animation failed: '+(controller.failed.at(-1)||'Synty clip unavailable'));
+      return;
+    }
+    if (generation!==walkGeneration) return;
+    if (!controller.play('Walk',0.2)) return;
+    if (!await api.startDesktopWalk()) {
+      controller.play('Idle');
+      toast('Desktop walking could not start.');
+    }
+  } catch(error) { toast('Walking: '+error.message); }
+  finally { if (generation===walkGeneration) walkPreparing=false; }
+});
+api.onWalkState(state => {
+  if (state.walking) {
+    if (!walking) {
+      walkBaseYaw=characterYaw;
+      walking=true;
+      walkCameraPending=true;
+    }
+    applyWalkDirection(state.direction);
+  } else {
+    walkGeneration++;
+    walkPreparing=false;
+    if (!walking) return;
+    walking=false;
+    characterYaw=walkBaseYaw;
+    if (character) moveToRest();
+    if (!kawaii?.play('Idle',0.2)) procedural?.play('Idle');
+    nextIdleMoment=performance.now()+10000;
+  }
+});
+api.onDesktopError(message => toast('Desktop: ' + message));
 api.onDesktopState(state => {
   const priorSeat=desktopSeat;
+  const wasDesktop=desktopModeActive;
   desktopModeActive = state.desktopMode === true;
+  if (wasDesktop && !desktopModeActive) { walkGeneration++; walkPreparing=false; }
   desktopSeat=desktopModeActive ? state.seat || null : null;
   if (!desktopSeat && priorSeat) restoreSeatRig();
   seatCameraPending=!!desktopSeat;
@@ -1228,7 +1311,9 @@ api.onDesktopState(state => {
     clearTimeout(desktopSpeechTimer);
     ui('desktop-speech').classList.add('hidden');
   }
-  requestAnimationFrame(() => { resize(); if (character) moveToRest(); seatCameraPending=!!desktopSeat; });
+  if (wasDesktop!==desktopModeActive || priorSeat?.kind!==desktopSeat?.kind || priorSeat?.anchor!==desktopSeat?.anchor) {
+    requestAnimationFrame(() => { resize(); if (character) moveToRest(); seatCameraPending=!!desktopSeat; if(walking)walkCameraPending=true; });
+  }
 });
 ui('desktop-mode').addEventListener('click', async () => {
   if (!character) { toast('Import Mya before entering desktop mode.'); return; }
