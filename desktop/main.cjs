@@ -305,6 +305,7 @@ function setDesktopMode(enabled) {
     desktopSeat = null;
     seatRequest++;
     desktopMode = false;
+    window.setAlwaysOnTop(true, 'floating');
     setClickThrough(false);
     if (controlBounds) window.setBounds(fitCompanionBounds(controlBounds));
     window.show();
@@ -372,6 +373,8 @@ async function placeDesktopSeat(kind) {
     const width = Math.min(340,bounds.width);
     const height = Math.min(500,bounds.height);
     const edge = target ? target.y : work.y + work.height;
+    // Windows taskbar overlays need a level above the shell taskbar.
+    window.setAlwaysOnTop(true, kind === 'taskbar' ? 'pop-up-menu' : 'floating');
     const x = target ? target.x + target.width * 0.75 - width/2 : work.x+work.width-width-30;
     const y = edge - height * 0.68;
     window.setBounds({x:Math.round(Math.max(bounds.x,Math.min(x,bounds.x+bounds.width-width))),
@@ -395,7 +398,8 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
-      webSecurity: true
+      webSecurity: true,
+      backgroundThrottling: false
     }
   });
   window.webContents.on('render-process-gone', (_event, details) => {
