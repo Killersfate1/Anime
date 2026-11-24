@@ -471,13 +471,23 @@ async function say(text) {
   speechSession.cancel();
   if (!currentSettings.voiceEnabled || currentSettings.quietMode) return;
   if (currentSettings.voiceMode !== 'system') {
-    const status = await api.neuralVoiceStatus();
-    if (status.ready) {
-      neuralVoicePlayer.spokenText = text;
-      neuralVoicePlayer.speak(text);
-      return;
+    try {
+      let status = await api.neuralVoiceStatus();
+      if (!status.ready && status.installed) {
+        ui('neural-voice-status').textContent = 'Loading installed neural voice offline…';
+        status = await api.loadNeuralVoice();
+      }
+      if (status.ready) {
+        neuralVoicePlayer.spokenText = text;
+        void neuralVoicePlayer.speak(text);
+        return;
+      }
+      if (status.error || status.lastError)
+        ui('neural-voice-status').textContent = 'Voice error: ' + (status.error || status.lastError);
+    } catch (error) {
+      ui('neural-voice-status').textContent = 'Voice error: ' + (error?.message || error);
     }
-    toast('Neural voice is not ready. Install voice in Settings; Windows voice used temporarily.');
+    toast('Using Windows speech fallback; check voice status in Settings.');
   }
   if (!speechSession.speak(text, { enabled:true })) {
     speaking = false;
@@ -852,9 +862,13 @@ ui('mic-toggle').addEventListener('click', async () => {
   try {
     if (mic.state === 'recording') { await mic.stop(); return; }
     if (mic.state !== 'idle') { await mic.cancel(); return; }
-    const status = await api.listeningStatus();
+    let status = await api.listeningStatus();
+    if (!status?.ready && status?.installed) {
+      ui('mic-status').textContent = 'Loading installed Whisper model offline…';
+      status = await api.loadListening();
+    }
     if (!status?.ready) {
-      const detail = status?.error || 'Local listening has not finished loading. Check Settings → Let Mya hear you.';
+      const detail = status?.error || 'Local listening is not installed. Open Settings → Let Mya hear you.';
       ui('mic-status').textContent = 'Microphone unavailable · ' + detail;
       showTab('settings');
       toast(detail);
@@ -897,7 +911,7 @@ function showNeuralVoiceStatus(status) {
       ? (status.message || 'Preparing Mya voice…')
       : status.lastError
         ? 'Voice error: ' + status.lastError
-        : status.installed ? 'Voice installed · loading…' : 'Neural voice not installed yet';
+        : status.installed ? 'Voice installed · loads when used' : 'Neural voice not installed yet';
   ui('install-voice').disabled = status.ready || status.state === 'installing' || status.state === 'loading';
   // A missing Kokoro model must not disable testing the built-in Windows
   // speech fallback. Both paths are testable without a chat response.
@@ -912,7 +926,7 @@ async function refreshListeningStatus() {
   try {
     const state=await api.listeningStatus();
     ui('listening-status').textContent=state.ready?'Ready · local-only listening':
-      state.installed?'Installed · loading model…':
+      state.installed?'Installed · loads when you click the microphone':
       state.error?'Listening error: '+state.error:'Not installed';
     ui('install-listening').disabled=state.ready;
     if(state.ready && mic.state==='idle')

@@ -4,7 +4,7 @@
 // no external speech API, separate server or cloud transmission of dialogue.
 const fs = require('node:fs');
 const path = require('node:path');
-const { Worker } = require('node:worker_threads');
+const { ModelProcessWorker: Worker } = require('./model-process-worker.cjs');
 
 const VOICES = Object.freeze([
   { id:'af_heart', label:'Heart · warm, sweet' },

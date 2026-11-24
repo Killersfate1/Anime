@@ -2,7 +2,7 @@
 // Own Whisper model inside a worker; no whisper.cpp server, speech API,
 // remote audio upload, or microphone background access.
 const fs=require('node:fs'),path=require('node:path');
-const {Worker}=require('node:worker_threads');
+const {ModelProcessWorker:Worker}=require('./model-process-worker.cjs');
 const MODEL='onnx-community/whisper-tiny.en';
 class MyaLocalListening{
   constructor({dataDir,WorkerType=Worker}={}){

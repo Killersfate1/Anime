@@ -424,14 +424,18 @@ function registerIpc() {
       // Interrupt any in-flight Whisper decode, then reload the cached model
       // privately so the next push-to-talk works without another install.
       localListening.cancel();
-      if(!quitting && localListening.installed())
-        localListening.init({allowDownload:false}).catch(error=>
-          console.warn('Local listening recovery:',error.message));
+      // Do not restart native ONNX inference while canceling; the next
+      // explicitly requested microphone session can reload cached weights.
     }
     micPermissionUntil = 0;
     return { ok: true };
   });
   ipcMain.handle('mya:listening-status', () => localListening.status());
+  ipcMain.handle('mya:listening-load', async event => {
+    if(!window || event.sender.id!==window.webContents.id)
+      return {ready:false,error:'Unauthorized listening model request'};
+    return localListening.init({allowDownload:false});
+  });
   ipcMain.handle('mya:listening-install', async event => {
     if(!window || event.sender.id!==window.webContents.id)
       return {ready:false,error:'Unauthorized listening installation request'};
@@ -930,22 +934,11 @@ app.whenReady().then(() => {
     repository:memoryRepository,retriever:memoryRetriever,extractor,
     relationship,consolidator:memoryConsolidator,inference:localEngine
   });
-  if(embeddingProvider.installed()) {
-    embeddingProvider.initialize({allowDownload:false})
-      .then(result=>{if(result.ready)return memoryRetriever.indexPending(40);})
-      .catch(error=>console.warn('Offline embedding initialization:',error.message));
-  }
+  // Do not eagerly load Whisper/Kokoro/embeddings at the same time as the
+  // local language model. ONNX loads only on demand in isolated subprocesses.
+  // SQLite FTS5 memory retrieval remains available without embeddings.
   localListening = new MyaLocalListening({dataDir:userFile('listening')});
-  if(localListening.installed()) {
-    localListening.init({allowDownload:false}).catch(error=>
-      console.warn('Offline microphone initialization:',error.message));
-  }
   neuralVoice = new MyaNeuralVoice({ dataDir:userFile('voice') });
-  if (neuralVoice.installed()) {
-    // Already-approved cached voice loads offline. No silent first-run download.
-    neuralVoice.init({allowDownload:false}).catch(error =>
-      console.warn('Mya voice could not initialize offline:', error.message));
-  }
   configurePermissions();
   registerIpc();
   createWindow();

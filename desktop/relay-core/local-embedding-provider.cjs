@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path');
-const {Worker}=require('node:worker_threads');
+const {ModelProcessWorker:Worker}=require('../model-process-worker.cjs');
 const MODEL='Xenova/all-MiniLM-L6-v2';
 class LocalEmbeddingProvider{
   constructor({dataDir,WorkerType=Worker}={}){
