@@ -64,6 +64,12 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   installEmbeddings: () => ipcRenderer.invoke('mya:embedding-install'),
   resetAllPersonalMemory: () => ipcRenderer.invoke('mya:memory-reset-all'),
   toggleClickThrough: () => ipcRenderer.invoke('mya:toggle-click-through'),
+  setDesktopMode: (enabled) => ipcRenderer.invoke('mya:desktop-mode', enabled),
+  onDesktopState: (fn) => {
+    const handler = (_event, state) => fn(state);
+    ipcRenderer.on('mya:desktop-state', handler);
+    return () => ipcRenderer.removeListener('mya:desktop-state', handler);
+  },
   minimize: () => ipcRenderer.invoke('mya:minimize'),
   quit: () => ipcRenderer.invoke('mya:quit'),
   onObservationStopped: (fn) => {
