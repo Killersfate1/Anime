@@ -1066,6 +1066,7 @@ function registerIpc() {
     return setDesktopMode(enabled);
   });
   ipcMain.handle('mya:minimize', () => {
+    stopDesktopWalk();
     stopObservation();
     micPermissionUntil = 0;
     activeTranscription?.abort();
