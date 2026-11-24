@@ -230,3 +230,21 @@ No background capture at launch; a deliberate source selection and Start action 
 ## Integration design
 
 The Unity animation pack should be retargeted to the exact GLB, then exported into animation clips that a desktop 3D renderer can play. The AI controller should emit structured, constrained intent such as `{ mood: 'happy', gesture: 'Cheer', speech: '...' }`. The avatar renderer should never depend on API access and the privacy gate must remain in charge of camera/microphone/screen permissions.
+
+## Desktop presence and seating preview
+
+Use the **Desktop** button after importing your VRM or press **Ctrl+Shift+D** to switch between the normal controls and the character-only transparent desktop view. **Ctrl+Shift+M** toggles mouse pass-through. Turn pass-through off to drag the companion, and back on to use underlying applications without interception. Both recovery shortcuts must register successfully before character-only mode is enabled. Replies can appear temporarily as a speech bubble without reopening the control panel.
+
+- **Ctrl+Shift+F8**: sit at the lower work-area edge of the monitor under the mouse (the top of the taskbar when it is docked at the bottom). The overlay is raised above the taskbar while seated; desktop clicks are passed through by default on entering desktop mode.
+- **Ctrl+Shift+F9**: focus the intended application window first, then press the shortcut. Windows foreground geometry is read once using a hidden local PowerShell process and Win32/DWM; no screenshot or window title is captured for seating. This is snapshot placement, not live following. Top-edge placement may clip near the display top, particularly for maximized windows. Press again after moving the window.
+- The sitting preview requires a VRM humanoid with mapped hips, upper legs, lower legs and feet. It overrides only leg pose after existing Kawaii animation updates and keeps facial/upper-body behavior. It is not a verified authored sitting animation. The normal panel and original avatar remain intact. On small screens/taskbar edges legs may clip.
+
+### Windows acceptance checklist (not yet executed)
+
+1. From desktop run `npm install`, `npm run check`, `npm test`, then `npm start`.
+2. Import the actual Mya VRM. Confirm upright appearance, idle animation, and local chat response using the installed brain. Enter desktop mode: only the avatar should appear and underlying desktop remains visible.
+3. Click a desktop shortcut or another application through the overlay, toggle Ctrl+Shift+M, drag Mya, toggle back, then recover the chat panel with Ctrl+Shift+D. Test shortcut conflicts, screen scaling at 100/150%, multiple monitors and resizes.
+4. On a bottom taskbar use Ctrl+Shift+F8. Verify hips meet the taskbar top, knees bend naturally, skinning looks correct, and taskbar clicks pass through. Focus a nonmaximized Notepad window and use Ctrl+Shift+F9. Verify seat contact with its top edge; repeat after moving the window. Check the shortcut on a maximized window, and recover chat.
+5. Test voice and opt-in screen observation while in overlay mode; verify stop controls remain reachable. Test text replies and speech bubbles. Confirm no capture begins on entering desktop mode.
+
+Still open: live window-following, authored Kawaii seated/walking animations and IK calibration, arbitrary taskbar orientations, Steam/fullscreen compatibility and real Windows testing. These changes do not resolve an absent local GGUF runtime/model by themselves.
