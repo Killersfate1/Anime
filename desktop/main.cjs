@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut, se
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { execFile } = require('node:child_process');
 const { InitiativeGate } = require('./initiative.cjs');
 const { ChatContext } = require('./chat-context.cjs');
 const { compareFrames } = require('./screen-change.cjs');
@@ -97,6 +98,8 @@ let desktopShortcutReady = false;
 let clickShortcutReady = false;
 let controlBounds = null;
 let companionBounds = null;
+let desktopSeat = null;
+let seatRequest = 0;
 let activeAnalysis = null;
 let quitting = false;
 let micPermissionUntil = 0;
@@ -264,8 +267,8 @@ function stopObservation() {
 }
 function publishDesktopState() {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
-    window.webContents.send('mya:desktop-state', { desktopMode, ignoreMouse });
-  return { desktopMode, ignoreMouse };
+    window.webContents.send('mya:desktop-state', { desktopMode, ignoreMouse, seat: desktopSeat });
+  return { desktopMode, ignoreMouse, seat: desktopSeat };
 }
 function setClickThrough(value) {
   ignoreMouse = Boolean(value) && clickShortcutReady;
@@ -299,6 +302,8 @@ function setDesktopMode(enabled) {
     setClickThrough(true);
   } else {
     companionBounds = window.getBounds();
+    desktopSeat = null;
+    seatRequest++;
     desktopMode = false;
     setClickThrough(false);
     if (controlBounds) window.setBounds(fitCompanionBounds(controlBounds));
@@ -306,6 +311,78 @@ function setDesktopMode(enabled) {
     window.focus();
   }
   return publishDesktopState();
+}
+// Window geometry only: no window title, screenshot or process data is retained.
+function foregroundWindowRect() {
+  if (process.platform !== 'win32') return Promise.reject(new Error('Window seating requires Windows.'));
+  const script = `
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class RelayWindowGeometry {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int L,T,R,B; }
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
+  [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out Rect r, int n);
+}
+'@
+try { [void][RelayWindowGeometry]::SetThreadDpiAwarenessContext([IntPtr](-4)) } catch {}
+$h=[RelayWindowGeometry]::GetForegroundWindow()
+if ($h -eq [IntPtr]::Zero -or [RelayWindowGeometry]::IsIconic($h)) { exit 2 }
+[uint32]$owner=0
+[void][RelayWindowGeometry]::GetWindowThreadProcessId($h,[ref]$owner)
+if ($owner -eq ${process.pid}) { exit 3 }
+$r=New-Object RelayWindowGeometry+Rect
+if ([RelayWindowGeometry]::DwmGetWindowAttribute($h,9,[ref]$r,16) -ne 0) {
+  if (-not [RelayWindowGeometry]::GetWindowRect($h,[ref]$r)) { exit 4 }
+}
+@{left=$r.L;top=$r.T;right=$r.R;bottom=$r.B} | ConvertTo-Json -Compress
+`;
+  return new Promise((resolve,reject) => {
+    execFile('powershell.exe', ['-NoProfile','-NonInteractive','-EncodedCommand',
+      Buffer.from(script,'utf16le').toString('base64')],
+      { windowsHide: true, timeout: 8000, maxBuffer: 16384 }, (err, stdout) => {
+        if (err) return reject(new Error('Focus another visible window first, then use the window-seat shortcut.'));
+        try {
+          const raw = JSON.parse(stdout.trim());
+          if (![raw.left,raw.top,raw.right,raw.bottom].every(Number.isFinite)) throw Error('Invalid bounds');
+          const tl = screen.screenToDipPoint({x:raw.left,y:raw.top});
+          const br = screen.screenToDipPoint({x:raw.right,y:raw.bottom});
+          if (br.x <= tl.x || br.y <= tl.y) throw Error('Empty bounds');
+          resolve({x:tl.x,y:tl.y,width:br.x-tl.x,height:br.y-tl.y});
+        } catch (error) { reject(error); }
+      });
+  });
+}
+async function placeDesktopSeat(kind) {
+  const request = ++seatRequest;
+  if (!window || window.isDestroyed()) return;
+  let target = null;
+  try {
+    if (kind === 'window') target = await foregroundWindowRect();
+    if (request !== seatRequest || !window || window.isDestroyed()) return;
+    const display = target ? screen.getDisplayMatching(target) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const bounds = display.bounds;
+    const work = display.workArea;
+    const result = setDesktopMode(true);
+    if (result.error) throw Error(result.error);
+    const width = Math.min(340,bounds.width);
+    const height = Math.min(500,bounds.height);
+    const edge = target ? target.y : work.y + work.height;
+    const x = target ? target.x + target.width * 0.75 - width/2 : work.x+work.width-width-30;
+    const y = edge - height * 0.68;
+    window.setBounds({x:Math.round(Math.max(bounds.x,Math.min(x,bounds.x+bounds.width-width))),
+      y:Math.round(Math.max(bounds.y,Math.min(y,bounds.y+bounds.height-height))), width,height});
+    const actual = window.getBounds();
+    desktopSeat = {kind, anchor:Math.max(0.08,Math.min(0.96,(edge-actual.y)/actual.height))};
+    publishDesktopState();
+  } catch (error) {
+    if (request === seatRequest && window && !window.isDestroyed())
+      window.webContents.send('mya:desktop-error',error.message);
+  }
 }
 function createWindow() {
   window = new BrowserWindow({
@@ -1008,6 +1085,9 @@ app.whenReady().then(() => {
     if (!window) return;
     setDesktopMode(!desktopMode);
   });
+  const taskbarSeatReady = globalShortcut.register('CommandOrControl+Shift+F8', () => { void placeDesktopSeat('taskbar'); });
+  const windowSeatReady = globalShortcut.register('CommandOrControl+Shift+F9', () => { void placeDesktopSeat('window'); });
+  if (!taskbarSeatReady || !windowSeatReady) console.warn('One or more desktop seating shortcuts could not be registered.');
   if (!clickShortcutReady || !desktopShortcutReady)
     console.warn('Mya desktop shortcuts unavailable; companion mode disabled for safe recovery.');
 });
