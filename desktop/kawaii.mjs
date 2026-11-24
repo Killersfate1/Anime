@@ -42,6 +42,16 @@ const VRM_TO_FBX = {
   leftFoot: 'Foot_L', rightFoot: 'Foot_R',
   leftToes: 'Toes_L', rightToes: 'Toes_R'
 };
+// Synty humanoid names verified against A_Walk_F_Femn.fbx.meta.
+const SYNTY_NAMES = {
+  Hips:'Hips', Spine:'Spine_01', Chest:'Spine_02', Neck:'Neck', Head:'Head',
+  Shoulder_L:'Clavicle_L', Shoulder_R:'Clavicle_R',
+  'Upper Arm_L':'Shoulder_L', 'Upper Arm_R':'Shoulder_R',
+  'Lower Arm_L':'Elbow_L', 'Lower Arm_R':'Elbow_R',
+  Hand_L:'Hand_L', Hand_R:'Hand_R', 'Upper Leg_L':'UpperLeg_L', 'Upper Leg_R':'UpperLeg_R',
+  'Lower Leg_L':'LowerLeg_L', 'Lower Leg_R':'LowerLeg_R', Foot_L:'Ankle_L', Foot_R:'Ankle_R',
+  Toes_L:'Ball_L', Toes_R:'Ball_R'
+};
 function getSkinnedMesh(object) {
   let found = null;
   object.traverse(node => { if (!found && node.isSkinnedMesh && node.skeleton) found = node; });
@@ -65,6 +75,7 @@ export class MyaKawaiiAnimation {
     this.state = null;
     this.wantedState = 'Idle';
     this.failed = [];
+    this.failedStates = new Set();
     this.ready = false;
     this.disposed = false;
     this.maxCachedActions = 4;
@@ -107,7 +118,7 @@ export class MyaKawaiiAnimation {
   }
 
   _ensure(state) {
-    if (this.disposed || !this.available.has(state)) return Promise.resolve(false);
+    if (this.disposed || !this.available.has(state) || this.failedStates.has(state)) return Promise.resolve(false);
     if (this.actions.has(state)) return Promise.resolve(true);
     if (this.pending.has(state)) return this.pending.get(state);
 
@@ -115,8 +126,10 @@ export class MyaKawaiiAnimation {
     // allocations existing simultaneously in Chromium's JS heap.
     const job = this.queue.then(() => this._loadOne(state))
       .catch(error => {
-        if (!this.disposed)
+        if (!this.disposed) {
+          this.failedStates.add(state);
           this.failed.push(state + ': ' + (error?.message || error));
+        }
         return false;
       })
       .finally(() => { this.pending.delete(state); });
@@ -154,7 +167,9 @@ export class MyaKawaiiAnimation {
       // Kawaii FBXs may prefix humanoid bones with namespace or rig prefixes
       // (e.g. mixamorig:Hips). The old exact-only lookup missed valid rigs.
       const sourceBoneName = name => {
-        const normalized=normalize(name);
+        const mapped = file.pack === 'synty' ? SYNTY_NAMES[name] : name;
+        if (!mapped) return undefined;
+        const normalized=normalize(mapped);
         return byName.get(normalized) ||
           [...byName.entries()].find(([key]) => key.endsWith(normalized))?.[1];
       };
@@ -182,7 +197,14 @@ export class MyaKawaiiAnimation {
       if (!clip) throw new Error('No animation in source FBX');
       const pelvis = this.vrm?.humanoid?.getRawBoneNode?.('hips') ||
         this.skinnedMesh.skeleton.bones.find(b => keyOfTargetBone(b.name) === 'pelvis');
-      const retargeted = SkeletonUtils.retargetClip(this.skinnedMesh, source, clip, {
+      // SkeletonUtils samples by mutating its target. Never use the visible
+      // avatar as that target: lazy-loading an action would snap its pose.
+      const clone = SkeletonUtils.clone(this.character);
+      const target = getSkinnedMesh(clone);
+      if (!target) throw Error('Cloned target has no skeleton');
+      target.skeleton.pose();
+      clone.updateMatrixWorld(true);
+      const retargeted = SkeletonUtils.retargetClip(target, source, clip, {
         names,
         hip: pelvis ? names[pelvis.name] || 'Hips' : 'Hips',
         hipInfluence: new THREE.Vector3(0, 0, 0),
@@ -192,6 +214,32 @@ export class MyaKawaiiAnimation {
       if (!retargeted || !retargeted.tracks.length || !Number.isFinite(retargeted.duration) ||
           retargeted.duration <= 0) throw new Error('Retarget produced no usable tracks');
 
+      // Bind by unique live bone UUID, not .bones[name] against the scene
+      // root (which has no skeleton). Keep rest translation and scale intact.
+      const live = new Map(this.skinnedMesh.skeleton.bones.map(b=>[b.name,b]));
+      retargeted.tracks = retargeted.tracks.flatMap(track => {
+        const match=/^\.bones\[([^\]]+)\]\.quaternion$/.exec(track.name);
+        const bone=match ? live.get(match[1]) : null;
+        if (!bone || !Array.from(track.values).every(Number.isFinite)) return [];
+        track.name=bone.uuid+'.quaternion';
+        return [track];
+      });
+      if (retargeted.tracks.length < 9) throw Error('Not enough bound quaternion tracks: '+retargeted.tracks.length);
+      if (state === 'Walk') {
+        for (const expected of ['leftUpperLeg','rightUpperLeg','leftLowerLeg','rightLowerLeg']) {
+          const bone=this.vrm?.humanoid?.getRawBoneNode?.(expected);
+          if (this.vrm && (!bone || !retargeted.tracks.some(track=>track.name===bone.uuid+'.quaternion')))
+            throw Error('Walk missing leg mapping: '+expected);
+        }
+        const legTracks=retargeted.tracks.filter(track => {
+          const b=[...live.values()].find(item=>track.name===item.uuid+'.quaternion');
+          return b && /leg|thigh|ankle|foot/i.test(b.name);
+        });
+        if (!legTracks.some(track=> {
+          const q=new THREE.Quaternion().fromArray(track.values);
+          return Array.from(track.times).some((_,i)=>q.angleTo(new THREE.Quaternion().fromArray(track.values,i*4))>0.08);
+        })) throw Error('Walk has no measured leg animation');
+      }
       retargeted.name = 'Mya_' + state;
       if (this.disposed) return false;
       const action = this.mixer.clipAction(retargeted);
@@ -228,8 +276,10 @@ export class MyaKawaiiAnimation {
     }
   }
 
+  prepare(state) { return this._ensure(state); }
+
   play(state, transitionSeconds = 0.26) {
-    if (this.disposed || !this.available.has(state)) return false;
+    if (this.disposed || !this.available.has(state) || this.failedStates.has(state)) return false;
     this.wantedState = state;
     const next = this.actions.get(state);
     if (!next) {
