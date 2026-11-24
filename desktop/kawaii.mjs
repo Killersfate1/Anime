@@ -54,7 +54,9 @@ const SYNTY_NAMES = {
 };
 function getSkinnedMesh(object) {
   let found = null;
-  object.traverse(node => { if (!found && node.isSkinnedMesh && node.skeleton) found = node; });
+  object.traverse(node => {
+    if (node.isSkinnedMesh && node.skeleton && (!found || node.skeleton.bones.length > found.skeleton.bones.length)) found = node;
+  });
   return found;
 }
 
@@ -74,6 +76,7 @@ export class MyaKawaiiAnimation {
     this.activeAction = null;
     this.state = null;
     this.wantedState = 'Idle';
+    this.idleState = 'Idle';
     this.failed = [];
     this.failedStates = new Set();
     this.ready = false;
@@ -96,16 +99,16 @@ export class MyaKawaiiAnimation {
     try {
       this.available = new Set(await bridge.animationList());
       if (this.disposed) return false;
-      if (!this.available.has('Idle')) {
-        status('Kawaii idle clip is missing. Character model is preserved.');
-        return false;
+      let loaded = await this._ensure('Idle');
+      if (!loaded && !this.disposed) {
+        this.idleState='WalkIdle';
+        loaded=await this._ensure(this.idleState);
       }
-      const loaded = await this._ensure('Idle');
       if (this.disposed) return false;
-      this.ready = !!loaded && this.actions.has('Idle');
+      this.ready = !!loaded && this.actions.has(this.idleState);
       if (this.ready) this.play(this.wantedState || 'Idle');
       status(this.ready
-        ? 'Kawaii idle ready; gestures load on demand'
+        ? (this.idleState==='Idle'?'Kawaii':'Synty')+' idle ready; gestures load on demand'
         : 'Kawaii retargeting unavailable; model stays visible');
       return this.ready;
     } catch (error) {
@@ -231,9 +234,10 @@ export class MyaKawaiiAnimation {
           if (this.vrm && (!bone || !retargeted.tracks.some(track=>track.name===bone.uuid+'.quaternion')))
             throw Error('Walk missing leg mapping: '+expected);
         }
+        const legIds=new Set(['leftUpperLeg','rightUpperLeg','leftLowerLeg','rightLowerLeg'].map(name=>this.vrm?.humanoid?.getRawBoneNode?.(name)?.uuid).filter(Boolean));
         const legTracks=retargeted.tracks.filter(track => {
           const b=[...live.values()].find(item=>track.name===item.uuid+'.quaternion');
-          return b && /leg|thigh|ankle|foot/i.test(b.name);
+          return b && (legIds.has(b.uuid) || /leg|thigh|ankle|foot/i.test(b.name));
         });
         if (!legTracks.some(track=> {
           const q=new THREE.Quaternion().fromArray(track.values);
@@ -263,7 +267,7 @@ export class MyaKawaiiAnimation {
   _limitCache() {
     while (this.actions.size > this.maxCachedActions) {
       const candidates = [...this.actions.keys()]
-        .filter(state => state !== 'Idle' && state !== this.wantedState &&
+        .filter(state => state !== this.idleState && state !== this.wantedState &&
           this.actions.get(state) !== this.activeAction)
         .sort((a,b) => (this.lastUsed.get(a) || 0) - (this.lastUsed.get(b) || 0));
       if (!candidates.length) break;
@@ -279,6 +283,7 @@ export class MyaKawaiiAnimation {
   prepare(state) { return this._ensure(state); }
 
   play(state, transitionSeconds = 0.26) {
+    if (state==='Idle') state=this.idleState;
     if (this.disposed || !this.available.has(state) || this.failedStates.has(state)) return false;
     this.wantedState = state;
     const next = this.actions.get(state);
