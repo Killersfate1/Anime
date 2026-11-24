@@ -46,5 +46,15 @@
   "Wave": {
     "file": "@KA_Idle45_WaveHandSlightly.FBX",
     "loop": false
+  },
+  "Walk": {
+    "pack": "synty",
+    "file": "Locomotion/Walk/A_Walk_F_Femn.fbx",
+    "loop": true
+  },
+  "WalkIdle": {
+    "pack": "synty",
+    "file": "Idle/A_Idle_Standing_Femn.fbx",
+    "loop": true
   }
 }
