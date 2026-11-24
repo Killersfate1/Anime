@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut, session, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, desktopCapturer, globalShortcut, session, shell, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -79,6 +79,8 @@ if (!singleInstance) app.quit();
 else app.on('second-instance', () => {
   if (window) {
     if (window.isMinimized()) window.restore();
+    if (desktopMode) setDesktopMode(false);
+    setClickThrough(false);
     window.show();
     window.focus();
   }
@@ -90,6 +92,11 @@ let observationEnabled = false; // always OFF after a restart
 let lastSampleAt = 0;
 const initiative = new InitiativeGate();
 let ignoreMouse = false;
+let desktopMode = false;
+let desktopShortcutReady = false;
+let clickShortcutReady = false;
+let controlBounds = null;
+let companionBounds = null;
 let activeAnalysis = null;
 let quitting = false;
 let micPermissionUntil = 0;
@@ -254,6 +261,51 @@ function stopObservation() {
   initiative.reset();
   if (activeAnalysis) activeAnalysis.abort();
   window?.webContents.send('mya:observe-stopped');
+}
+function publishDesktopState() {
+  if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
+    window.webContents.send('mya:desktop-state', { desktopMode, ignoreMouse });
+  return { desktopMode, ignoreMouse };
+}
+function setClickThrough(value) {
+  ignoreMouse = Boolean(value) && clickShortcutReady;
+  if (window && !window.isDestroyed()) window.setIgnoreMouseEvents(ignoreMouse, { forward: true });
+  publishDesktopState();
+  return ignoreMouse;
+}
+function fitCompanionBounds(bounds) {
+  const display = screen.getDisplayMatching(bounds);
+  const work = display.workArea;
+  const width = Math.min(work.width, Math.max(320, bounds.width));
+  const height = Math.min(work.height, Math.max(400, bounds.height));
+  return { width, height,
+    x: Math.max(work.x, Math.min(bounds.x, work.x + work.width - width)),
+    y: Math.max(work.y, Math.min(bounds.y, work.y + work.height - height)) };
+}
+function setDesktopMode(enabled) {
+  if (!window || window.isDestroyed()) return { error: 'Mya window is unavailable' };
+  if (enabled && (!desktopShortcutReady || !clickShortcutReady))
+    return { error: 'Desktop shortcuts are unavailable. Close conflicting applications and restart Mya.' };
+  if (desktopMode === enabled) return publishDesktopState();
+  if (enabled) {
+    controlBounds = window.getBounds();
+    const work = screen.getDisplayMatching(controlBounds).workArea;
+    const target = companionBounds || {
+      width: 340, height: 500,
+      x: work.x + work.width - 350, y: work.y + work.height - 510
+    };
+    desktopMode = true;
+    window.setBounds(fitCompanionBounds(target));
+    setClickThrough(true);
+  } else {
+    companionBounds = window.getBounds();
+    desktopMode = false;
+    setClickThrough(false);
+    if (controlBounds) window.setBounds(fitCompanionBounds(controlBounds));
+    window.show();
+    window.focus();
+  }
+  return publishDesktopState();
 }
 function createWindow() {
   window = new BrowserWindow({
@@ -868,10 +920,10 @@ function registerIpc() {
       chatBusy = false;
     }
   });
-  ipcMain.handle('mya:toggle-click-through', () => {
-    ignoreMouse = !ignoreMouse;
-    window?.setIgnoreMouseEvents(ignoreMouse, { forward: true });
-    return ignoreMouse;
+  ipcMain.handle('mya:toggle-click-through', () => setClickThrough(!ignoreMouse));
+  ipcMain.handle('mya:desktop-mode', (_event, enabled) => {
+    if (typeof enabled !== 'boolean') return { error: 'Invalid desktop mode' };
+    return setDesktopMode(enabled);
   });
   ipcMain.handle('mya:minimize', () => {
     stopObservation();
@@ -948,11 +1000,16 @@ app.whenReady().then(() => {
     localEngine.start().catch(error =>
       console.warn('Mya AI startup failed:', error.message));
   }
-  globalShortcut.register('CommandOrControl+Shift+M', () => {
+  clickShortcutReady = globalShortcut.register('CommandOrControl+Shift+M', () => {
     if (!window) return;
-    ignoreMouse = !ignoreMouse;
-    window.setIgnoreMouseEvents(ignoreMouse, { forward: true });
+    setClickThrough(!ignoreMouse);
   });
+  desktopShortcutReady = globalShortcut.register('CommandOrControl+Shift+D', () => {
+    if (!window) return;
+    setDesktopMode(!desktopMode);
+  });
+  if (!clickShortcutReady || !desktopShortcutReady)
+    console.warn('Mya desktop shortcuts unavailable; companion mode disabled for safe recovery.');
 });
 app.on('before-quit', () => {
   quitting = true;
