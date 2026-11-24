@@ -457,6 +457,7 @@ function createWindow() {
     }
   });
   window.webContents.on('render-process-gone', (_event, details) => {
+    stopDesktopWalk(false);
     logRuntimeFault('renderer', details);
     stopObservation();
     console.error('Mya renderer exited:', details.reason, details.exitCode);
@@ -1147,11 +1148,12 @@ app.whenReady().then(() => {
     if (!window) return;
     setDesktopMode(!desktopMode);
   });
-  globalShortcut.register('CommandOrControl+Shift+F10', () => {
+  const walkShortcutReady=globalShortcut.register('CommandOrControl+Shift+F10', () => {
     if (!window || window.isDestroyed()) return;
     if (desktopWalk) stopDesktopWalk();
     else window.webContents.send('mya:walk-request');
   });
+  if (!walkShortcutReady) console.warn('Mya walking shortcut unavailable');
   screen.on('display-metrics-changed', () => stopDesktopWalk());
   screen.on('display-removed', () => stopDesktopWalk());
   const taskbarSeatReady = globalShortcut.register('CommandOrControl+Shift+F8', () => { void placeDesktopSeat('taskbar'); });
