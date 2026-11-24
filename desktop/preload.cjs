@@ -70,6 +70,18 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
     ipcRenderer.on('mya:desktop-error', handler);
     return () => ipcRenderer.removeListener('mya:desktop-error', handler);
   },
+  startDesktopWalk: () => ipcRenderer.invoke('mya:walk-start'),
+  stopDesktopWalk: () => ipcRenderer.invoke('mya:walk-stop'),
+  onWalkRequest: fn => {
+    const handler = () => fn();
+    ipcRenderer.on('mya:walk-request',handler);
+    return () => ipcRenderer.removeListener('mya:walk-request',handler);
+  },
+  onWalkState: fn => {
+    const handler = (_event,state) => fn(state);
+    ipcRenderer.on('mya:walk-state',handler);
+    return () => ipcRenderer.removeListener('mya:walk-state',handler);
+  },
   onDesktopState: (fn) => {
     const handler = (_event, state) => fn(state);
     ipcRenderer.on('mya:desktop-state', handler);
