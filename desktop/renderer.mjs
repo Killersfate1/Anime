@@ -11,6 +11,8 @@ import { MyaFace } from './face.mjs';
 
 const ui = (id) => document.getElementById(id);
 const api = window.mya;
+let desktopModeActive = false;
+let desktopSpeechTimer = null;
 const mic = new MyaPushToTalk(
   api,
   (status) => {
@@ -491,6 +493,13 @@ resize();
 requestAnimationFrame(frame);
 
 async function say(text) {
+  if (desktopModeActive && typeof text === 'string' && text.trim()) {
+    const bubble = ui('desktop-speech');
+    bubble.textContent = text.length > 240 ? text.slice(0, 237) + '…' : text;
+    bubble.classList.remove('hidden');
+    clearTimeout(desktopSpeechTimer);
+    desktopSpeechTimer = setTimeout(() => bubble.classList.add('hidden'), 10000);
+  }
   neuralVoicePlayer.cancel();
   speechSession.cancel();
   if (!currentSettings.voiceEnabled || currentSettings.quietMode) return;
@@ -1148,6 +1157,24 @@ ui('quit').addEventListener('click', async () => {
   await mic.cancel();
   api.quit();
 });
+api.onDesktopState(state => {
+  desktopModeActive = state.desktopMode === true;
+  document.body.classList.toggle('desktop-mode', desktopModeActive);
+  document.body.classList.toggle('desktop-interactive', desktopModeActive && !state.ignoreMouse);
+  if (!desktopModeActive) {
+    clearTimeout(desktopSpeechTimer);
+    ui('desktop-speech').classList.add('hidden');
+  }
+  requestAnimationFrame(() => { resize(); if (character) moveToRest(); });
+});
+ui('desktop-mode').addEventListener('click', async () => {
+  if (!character) { toast('Import Mya before entering desktop mode.'); return; }
+  toast('Ctrl+Shift+D restores chat; Ctrl+Shift+M enables dragging.');
+  try {
+    const result = await api.setDesktopMode(true);
+    if (result.error) toast(result.error);
+  } catch (error) { toast('Desktop mode unavailable: ' + error.message); }
+});
 ui('click-through').addEventListener('click', async () => {
   const value = await api.toggleClickThrough();
   if (value) toast('Click-through enabled. Ctrl+Shift+M to interact again.');
@@ -1205,15 +1232,15 @@ api.onObservationStopped(() => {
   ui('observation').textContent = 'Screen observation is disabled.';
 });
 ui('avatar-stage').addEventListener('wheel', event => {
-  if (!character) return;
+  if (!character || desktopModeActive) return;
   event.preventDefault();
   const zoom = Math.sign(event.deltaY) * 0.14;
   camera.position.z = Math.max(modelCenter.z + 0.5, camera.position.z + zoom * viewportDistance);
 }, { passive: false });
 let pointerX = null;
-ui('avatar-stage').addEventListener('pointerdown', event => { pointerX = event.clientX; });
+ui('avatar-stage').addEventListener('pointerdown', event => { if (!desktopModeActive) pointerX = event.clientX; });
 ui('avatar-stage').addEventListener('pointermove', event => {
-  if (pointerX === null || !character) return;
+  if (desktopModeActive || pointerX === null || !character) return;
   const diff = event.clientX - pointerX;
   pointerX = event.clientX;
   characterYaw += diff * 0.013;
