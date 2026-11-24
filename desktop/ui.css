@@ -90,3 +90,14 @@ input[type="range"] { width: 100%; accent-color: #ef80c7; }
 .research-output strong { color:#dcace8; font-size:11px; overflow-wrap:anywhere; }
 .research-source { background:#39284e; border:0; color:#ead0f8; padding:5px 8px; font-size:11px; text-align:left; overflow-wrap:anywhere; }
 .research-source:hover { background:#55346d; }
+
+/* Desktop presence uses the same live avatar and chat session. No opaque shell. */
+#desktop-mode { width: auto; padding: 0 7px; font-size: 11px; }
+.desktop-speech, .desktop-help { display: none; }
+body.desktop-mode .app { background: transparent; border: 0; box-shadow: none; border-radius: 0; }
+body.desktop-mode .titlebar, body.desktop-mode .panel, body.desktop-mode .avatar-hud { display: none; }
+body.desktop-mode .avatar-stage { height: 100%; min-height: 0; flex: 1; background: transparent; }
+body.desktop-mode.desktop-interactive .avatar-stage { -webkit-app-region: drag; }
+body.desktop-mode .desktop-speech { display: block; position: absolute; top: 8px; left: 10px; right: 10px; padding: 8px 11px; background: #22172dea; color: #fff; border-radius: 12px; text-align: center; overflow-wrap: anywhere; max-height: 25%; overflow: hidden; pointer-events: none; }
+body.desktop-mode.desktop-interactive .desktop-help { display: block; position: absolute; bottom: 8px; left: 8px; right: 8px; padding: 6px; background: #22172dea; border-radius: 8px; font-size: 10px; text-align: center; pointer-events: none; }
+body.desktop-mode .avatar-empty { background: #1c1429db; -webkit-app-region: no-drag; }
