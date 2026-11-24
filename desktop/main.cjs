@@ -25,6 +25,12 @@ const { MyaLocalListening } = require('./local-listening.cjs');
 const { MyaWebResearch, explicitResearchQuery, shouldConsiderAutoresearch, cleanSearchQuery } = require('./web-research.cjs');
 const canonicalAvatar = require('./avatar-manifest.json');
 const kawaiiClips = require('./animation-manifest.json');
+function animationFile(entry) {
+  const root = entry.pack === 'synty'
+    ? path.join('Assets','Synty','AnimationBaseLocomotion','Animations','Polygon','Feminine')
+    : path.join('Assets','KAWAII_ANIMATIOMS_100','Assets','Animations');
+  return path.join(__dirname,'..',root,entry.file);
+}
 
 // Optional safe fallback for Windows GPU-driver failures:
 // PowerShell: $env:MYA_SOFTWARE_RENDERING='1'; npm start
@@ -99,6 +105,8 @@ let clickShortcutReady = false;
 let controlBounds = null;
 let companionBounds = null;
 let desktopSeat = null;
+let desktopWalk = null;
+let walkTimer = null;
 let seatRequest = 0;
 let activeAnalysis = null;
 let quitting = false;
@@ -265,12 +273,56 @@ function stopObservation() {
   if (activeAnalysis) activeAnalysis.abort();
   window?.webContents.send('mya:observe-stopped');
 }
+function stopDesktopWalk(notify = true) {
+  if (walkTimer) clearInterval(walkTimer);
+  walkTimer = null;
+  const wasWalking = !!desktopWalk;
+  desktopWalk = null;
+  if (wasWalking && notify && window && !window.isDestroyed())
+    window.webContents.send('mya:walk-state', { walking:false });
+}
+function startDesktopWalk() {
+  if (!window || window.isDestroyed() || desktopWalk) return false;
+  const result = setDesktopMode(true);
+  if (result.error) return false;
+  desktopSeat = null;
+  seatRequest++;
+  window.setAlwaysOnTop(true, 'floating');
+  setClickThrough(true);
+  const bounds = window.getBounds();
+  const work = screen.getDisplayMatching(bounds).workArea;
+  const width = Math.min(bounds.width,work.width);
+  const height = Math.min(bounds.height,work.height);
+  const min = work.x, max = work.x + work.width - width;
+  if (max-min < 30) return false;
+  const x = Math.max(min,Math.min(bounds.x,max));
+  window.setBounds({x:Math.round(x),y:work.y+work.height-height,width,height});
+  desktopWalk = { x, min, max, direction:x>=(min+max)/2?-1:1, last:performance.now() };
+  publishDesktopState();
+  window.webContents.send('mya:walk-state',{walking:true,direction:desktopWalk.direction});
+  walkTimer = setInterval(() => {
+    if (!desktopWalk || !window || window.isDestroyed() || !desktopMode || !ignoreMouse) { stopDesktopWalk(); return; }
+    const now=performance.now();
+    const dt=Math.min(0.1,(now-desktopWalk.last)/1000);
+    desktopWalk.last=now;
+    desktopWalk.x += desktopWalk.direction * 70 * dt;
+    if (desktopWalk.x <= desktopWalk.min || desktopWalk.x >= desktopWalk.max) {
+      desktopWalk.x=Math.max(desktopWalk.min,Math.min(desktopWalk.max,desktopWalk.x));
+      desktopWalk.direction=desktopWalk.x===desktopWalk.min?1:-1;
+      window.webContents.send('mya:walk-state',{walking:true,direction:desktopWalk.direction});
+    }
+    const b=window.getBounds();
+    window.setPosition(Math.round(desktopWalk.x),b.y);
+  },33);
+  return true;
+}
 function publishDesktopState() {
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed())
     window.webContents.send('mya:desktop-state', { desktopMode, ignoreMouse, seat: desktopSeat });
   return { desktopMode, ignoreMouse, seat: desktopSeat };
 }
 function setClickThrough(value) {
+  if (!value) stopDesktopWalk();
   ignoreMouse = Boolean(value) && clickShortcutReady;
   if (window && !window.isDestroyed()) window.setIgnoreMouseEvents(ignoreMouse, { forward: true });
   publishDesktopState();
@@ -301,6 +353,7 @@ function setDesktopMode(enabled) {
     window.setBounds(fitCompanionBounds(target));
     setClickThrough(true);
   } else {
+    stopDesktopWalk();
     companionBounds = window.getBounds();
     desktopSeat = null;
     seatRequest++;
@@ -359,6 +412,7 @@ if ([RelayWindowGeometry]::DwmGetWindowAttribute($h,9,[ref]$r,16) -ne 0) {
   });
 }
 async function placeDesktopSeat(kind) {
+  stopDesktopWalk();
   const request = ++seatRequest;
   if (!window || window.isDestroyed()) return;
   let target = null;
@@ -419,7 +473,7 @@ function createWindow() {
     console.error('Mya startup error:', error.message);
   });
   window.once('ready-to-show', () => window?.show());
-  window.on('closed', () => { window = null; stopObservation(); });
+  window.on('closed', () => { stopDesktopWalk(false); window = null; stopObservation(); });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
 }
@@ -462,8 +516,7 @@ async function localStatus(url) {
 function registerIpc() {
   ipcMain.handle('mya:diagnostics', async () => {
     const available = Object.values(kawaiiClips).filter(entry => {
-      const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100',
-        'Assets', 'Animations', entry.file);
+      const file = animationFile(entry);
       return fs.existsSync(file);
     }).length;
     const whisper = localListening?.status() || {ready:false,installed:false};
@@ -528,7 +581,7 @@ function registerIpc() {
   ipcMain.handle('mya:engine-status', () => localEngine.status());
   ipcMain.handle('mya:animation-list', () =>
     Object.keys(kawaiiClips).filter(name => {
-      const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', kawaiiClips[name].file);
+      const file = animationFile(kawaiiClips[name]);
       return fs.existsSync(file);
     })
   );
@@ -536,11 +589,11 @@ function registerIpc() {
     // No renderer-controlled paths: only exact, repository-shipped FBX clips.
     if (typeof name !== 'string' || !Object.hasOwn(kawaiiClips, name)) return null;
     const entry = kawaiiClips[name];
-    const file = path.join(__dirname, '..', 'Assets', 'KAWAII_ANIMATIOMS_100', 'Assets', 'Animations', entry.file);
+    const file = animationFile(entry);
     if (!fs.existsSync(file)) return null;
     const bytes = fs.readFileSync(file);
     if (bytes.length > 30 * 1024 * 1024) throw new Error('Animation clip is too large');
-    return { name, loop: !!entry.loop, bytes: Uint8Array.from(bytes) };
+    return { name, pack: entry.pack || 'kawaii', loop: !!entry.loop, bytes: Uint8Array.from(bytes) };
   });
   ipcMain.handle('mya:mic-arm', (event) => {
     if (!window || event.sender.id !== window.webContents.id || currentSettings().quietMode) return false;
@@ -1002,6 +1055,11 @@ function registerIpc() {
     }
   });
   ipcMain.handle('mya:toggle-click-through', () => setClickThrough(!ignoreMouse));
+  ipcMain.handle('mya:walk-start', event => {
+    if (!window || event.sender.id !== window.webContents.id) return false;
+    return startDesktopWalk();
+  });
+  ipcMain.handle('mya:walk-stop', () => { stopDesktopWalk(); return true; });
   ipcMain.handle('mya:desktop-mode', (_event, enabled) => {
     if (typeof enabled !== 'boolean') return { error: 'Invalid desktop mode' };
     return setDesktopMode(enabled);
@@ -1089,6 +1147,13 @@ app.whenReady().then(() => {
     if (!window) return;
     setDesktopMode(!desktopMode);
   });
+  globalShortcut.register('CommandOrControl+Shift+F10', () => {
+    if (!window || window.isDestroyed()) return;
+    if (desktopWalk) stopDesktopWalk();
+    else window.webContents.send('mya:walk-request');
+  });
+  screen.on('display-metrics-changed', () => stopDesktopWalk());
+  screen.on('display-removed', () => stopDesktopWalk());
   const taskbarSeatReady = globalShortcut.register('CommandOrControl+Shift+F8', () => { void placeDesktopSeat('taskbar'); });
   const windowSeatReady = globalShortcut.register('CommandOrControl+Shift+F9', () => { void placeDesktopSeat('window'); });
   if (!taskbarSeatReady || !windowSeatReady) console.warn('One or more desktop seating shortcuts could not be registered.');
@@ -1096,6 +1161,7 @@ app.whenReady().then(() => {
     console.warn('Mya desktop shortcuts unavailable; companion mode disabled for safe recovery.');
 });
 app.on('before-quit', () => {
+  stopDesktopWalk(false);
   quitting = true;
   micPermissionUntil = 0;
   activeTranscription?.abort();
