@@ -65,6 +65,11 @@ contextBridge.exposeInMainWorld('mya', Object.freeze({
   resetAllPersonalMemory: () => ipcRenderer.invoke('mya:memory-reset-all'),
   toggleClickThrough: () => ipcRenderer.invoke('mya:toggle-click-through'),
   setDesktopMode: (enabled) => ipcRenderer.invoke('mya:desktop-mode', enabled),
+  onDesktopError: (fn) => {
+    const handler = (_event, message) => fn(message);
+    ipcRenderer.on('mya:desktop-error', handler);
+    return () => ipcRenderer.removeListener('mya:desktop-error', handler);
+  },
   onDesktopState: (fn) => {
     const handler = (_event, state) => fn(state);
     ipcRenderer.on('mya:desktop-state', handler);
