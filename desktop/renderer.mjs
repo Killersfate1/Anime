@@ -13,6 +13,9 @@ const ui = (id) => document.getElementById(id);
 const api = window.mya;
 let desktopModeActive = false;
 let desktopSpeechTimer = null;
+let desktopSeat = null;
+let seatCameraPending = false;
+let seatRig = null;
 const mic = new MyaPushToTalk(
   api,
   (status) => {
@@ -180,6 +183,57 @@ function reportMotionStatus() {
     ' · Active: ' + (preferProcedural || !kawaii?.ready ? 'backup' : 'Kawaii') +
     (kawaii?.failed?.length ? ' · Retarget warnings: ' + kawaii.failed.slice(-2).join(' / ') : '');
 }
+// Post-process the visible humanoid leg chains, leaving Kawaii upper-body
+// animation and VRM expressions active. This is a procedural seated preview.
+function resolveSeatRig() {
+  const names = ['hips','leftUpperLeg','leftLowerLeg','leftFoot','rightUpperLeg','rightLowerLeg','rightFoot'];
+  const result = Object.fromEntries(names.map(name=>[name,activeVRM?.humanoid?.getRawBoneNode?.(name)]));
+  if (names.some(name=>!result[name])) return null;
+  result.rest = names.slice(1).map(name=>[result[name],result[name].quaternion.clone()]);
+  return result;
+}
+function restoreSeatRig() {
+  if (seatRig) for (const [bone,rest] of seatRig.rest) bone.quaternion.copy(rest);
+  seatRig=null;
+}
+function aimLegBone(bone, child, target) {
+  bone.updateWorldMatrix(true,true);
+  const direction=child.getWorldPosition(new THREE.Vector3()).sub(bone.getWorldPosition(new THREE.Vector3()));
+  if (direction.lengthSq()<1e-8) return;
+  const delta=new THREE.Quaternion().setFromUnitVectors(direction.normalize(),target.clone().normalize());
+  const world=bone.getWorldQuaternion(new THREE.Quaternion()).premultiply(delta);
+  const parent=bone.parent?.getWorldQuaternion(new THREE.Quaternion()) || new THREE.Quaternion();
+  bone.quaternion.copy(parent.invert().multiply(world));
+  bone.updateWorldMatrix(true,true);
+}
+function applyDesktopSeat() {
+  if (!desktopSeat || !character) return;
+  if (!seatRig) seatRig=resolveSeatRig();
+  if (!seatRig) {
+    if (seatCameraPending) {
+      seatCameraPending=false;
+      toast('Seated pose requires a VRM humanoid with mapped legs.');
+    }
+    return;
+  }
+  for (const side of ['left','right']) {
+    aimLegBone(seatRig[side+'UpperLeg'],seatRig[side+'LowerLeg'],new THREE.Vector3(side==='left'?0.09:-0.09,-0.05,1));
+    aimLegBone(seatRig[side+'LowerLeg'],seatRig[side+'Foot'],new THREE.Vector3(0,-1,0.08));
+  }
+  if (seatCameraPending) {
+    seatCameraPending=false;
+    camera.updateMatrixWorld(true);
+    const hips=seatRig.hips.getWorldPosition(new THREE.Vector3());
+    const depth=-hips.clone().applyMatrix4(camera.matrixWorldInverse).z;
+    const projected=hips.clone().project(camera);
+    if (depth>0 && Number.isFinite(projected.y)) {
+      const targetY=1-2*desktopSeat.anchor;
+      const offset=(projected.y-targetY)*depth*Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
+      camera.position.addScaledVector(new THREE.Vector3(0,1,0).applyQuaternion(camera.quaternion),offset);
+      camera.updateMatrixWorld(true);
+    }
+  }
+}
 function playMyaGesture(name) {
   if (!preferProcedural && kawaii?.ready && kawaii.play(name)) return true;
   return procedural?.play(name) || false;
@@ -311,6 +365,8 @@ function moveToRest() {
   camera.updateProjectionMatrix();
 }
 function applyAvatar(gltf) {
+  restoreSeatRig();
+  seatCameraPending=!!desktopSeat;
   speechSession.cancel();
   if (compatibilityMode) setTextureCompatibility(false);
   if (face) { face.dispose(); face = null; }
@@ -477,6 +533,7 @@ function frame(t) {
   }
   // The fallback maintains coherent idle motion when Kawaii retarget is
   // missing. Do not apply separate GLB bone oscillations on top of it.
+  applyDesktopSeat();
   neuralVoicePlayer.update();
   renderer.render(scene, camera);
 }
@@ -487,6 +544,7 @@ function resize() {
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
+  if (desktopSeat) seatCameraPending=true;
 }
 new ResizeObserver(resize).observe(ui('avatar-stage'));
 resize();
@@ -1158,14 +1216,18 @@ ui('quit').addEventListener('click', async () => {
   api.quit();
 });
 api.onDesktopState(state => {
+  const priorSeat=desktopSeat;
   desktopModeActive = state.desktopMode === true;
+  desktopSeat=desktopModeActive ? state.seat || null : null;
+  if (!desktopSeat && priorSeat) restoreSeatRig();
+  seatCameraPending=!!desktopSeat;
   document.body.classList.toggle('desktop-mode', desktopModeActive);
   document.body.classList.toggle('desktop-interactive', desktopModeActive && !state.ignoreMouse);
   if (!desktopModeActive) {
     clearTimeout(desktopSpeechTimer);
     ui('desktop-speech').classList.add('hidden');
   }
-  requestAnimationFrame(() => { resize(); if (character) moveToRest(); });
+  requestAnimationFrame(() => { resize(); if (character) moveToRest(); seatCameraPending=!!desktopSeat; });
 });
 ui('desktop-mode').addEventListener('click', async () => {
   if (!character) { toast('Import Mya before entering desktop mode.'); return; }
