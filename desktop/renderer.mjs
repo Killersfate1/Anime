@@ -1215,6 +1215,7 @@ ui('quit').addEventListener('click', async () => {
   await mic.cancel();
   api.quit();
 });
+api.onDesktopError(message => toast('Desktop seat: ' + message));
 api.onDesktopState(state => {
   const priorSeat=desktopSeat;
   desktopModeActive = state.desktopMode === true;
